@@ -193,7 +193,7 @@ export async function getDashboardStats(merchantId?: string) {
 
   // Monthly data (last 6 months)
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const monthlyData = [];
+  const monthlyData: { month: string; invoiced: number; collected: number; _year: number; _month: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     monthlyData.push({ month: monthNames[d.getMonth()], invoiced: 0, collected: 0, _year: d.getFullYear(), _month: d.getMonth() });
