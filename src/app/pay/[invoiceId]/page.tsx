@@ -17,6 +17,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   const [inputAmount, setInputAmount] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     getPublicInvoice(invoiceId).then((result) => {
@@ -201,6 +202,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
     // DEMO MODE: Actually writes to the database via the demo endpoint
     try {
+      setPaymentError(null);
       const res = await fetch("/api/demo-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,10 +215,10 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
       if (result.success) {
         setSuccess(true);
       } else {
-        alert("Demo payment failed: " + result.error);
+        setPaymentError("Payment failed: " + result.error);
       }
     } catch (err) {
-      alert("Demo payment error. Check console.");
+      setPaymentError("Payment could not be processed. Please try again or contact support.");
       console.error(err);
     } finally {
       setIsProcessing(false);
@@ -427,6 +429,16 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {paymentError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-red-700">Payment Error</p>
+                    <p className="text-red-600 mt-1">{paymentError}</p>
+                  </div>
                 </div>
               )}
 

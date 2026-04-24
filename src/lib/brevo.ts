@@ -63,27 +63,41 @@ export async function sendTeamInviteEmail(
           <p style="margin: 8px 0 0 0; font-size: 12px; color: #9A3412;">You will be asked to create a new password after your first login.</p>
         </div>
 
-        <p><strong>To accept this invitation:</strong></p>
-        <ol style="line-height: 2;">
-          <li>Go to the <a href="${loginLink}" style="color: #4C1D95; font-weight: bold;">PurpLedger Login Page</a></li>
-          <li>Enter your email: <strong>${toEmail}</strong></li>
-          <li>Enter the temporary password above</li>
-          <li>Enter the Business ID: <strong>${workspaceCode}</strong></li>
-          <li>You will be redirected to set a permanent password</li>
-        </ol>
+        <div style="background-color: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 12px 0; font-weight: bold; color: #166534;">To accept this invitation:</p>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 6px 0; color: #166534; vertical-align: top; width: 24px; font-weight: bold;">1.</td><td style="padding: 6px 0;">Go to the <a href="${loginLink}" style="color: #4C1D95; font-weight: bold;">PurpLedger Login Page</a></td></tr>
+            <tr><td style="padding: 6px 0; color: #166534; vertical-align: top; font-weight: bold;">2.</td><td style="padding: 6px 0;">Enter your email: <strong>${toEmail}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #166534; vertical-align: top; font-weight: bold;">3.</td><td style="padding: 6px 0;">Enter the temporary password above</td></tr>
+            <tr><td style="padding: 6px 0; color: #166534; vertical-align: top; font-weight: bold;">4.</td><td style="padding: 6px 0;">Enter the Business ID: <strong>${workspaceCode}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #166534; vertical-align: top; font-weight: bold;">5.</td><td style="padding: 6px 0;">You will be redirected to set a permanent password</td></tr>
+          </table>
+        </div>
 
-        <p style="margin-top: 30px; font-size: 12px; color: #6B7280;">
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${loginLink}" style="background-color: #4C1D95; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">
+            Accept Invitation &rarr;
+          </a>
+        </div>
+
+        <p style="margin-top: 20px; font-size: 12px; color: #6B7280;">
           If you did not expect this invitation, you can safely ignore this email.
         </p>
       </div>
+      <div style="background-color: #F9FAFB; padding: 16px; text-align: center; border-top: 1px solid #E5E7EB;">
+        <p style="margin: 0; font-size: 12px; color: #9CA3AF;">PurpLedger &mdash; Smart Invoicing & Payment Tracking</p>
+      </div>
     </div>
   `;
+
+  const textContent = `You've been invited to join ${businessName} on PurpLedger!\n\nRole: ${role.toUpperCase()}\nBusiness ID: ${workspaceCode}\nTemporary Password: ${tempPassword}\nYour Email: ${toEmail}\n\nSteps:\n1. Go to ${loginLink}\n2. Enter your email: ${toEmail}\n3. Enter the temporary password above\n4. Enter Business ID: ${workspaceCode}\n5. You'll be redirected to set a permanent password\n\nIf you did not expect this, ignore this email.`;
 
   return sendEmail({
     sender: { name: "PurpLedger", email: ADMIN_EMAIL },
     to: [{ email: toEmail }],
     subject: `You've been invited to join ${businessName} on PurpLedger`,
     htmlContent,
+    textContent,
   });
 }
 

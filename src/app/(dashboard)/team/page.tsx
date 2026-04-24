@@ -86,6 +86,7 @@ export default function TeamPage() {
   // Custom role state
   const [newRoleName, setNewRoleName] = useState("");
   const [creatingRole, setCreatingRole] = useState(false);
+  const [roleMessage, setRoleMessage] = useState<{type: "success" | "error", text: string} | null>(null);
   const [newRolePerms, setNewRolePerms] = useState<Record<string, boolean>>({
     use_purpbot: false,
     edit_invoice: false,
@@ -222,15 +223,15 @@ export default function TeamPage() {
   const handleCreateCustomRole = async () => {
     if (!newRoleName.trim() || !merchantId) return;
     setCreatingRole(true);
+    setRoleMessage(null);
     const { success, error } = await createCustomRoleAction(merchantId, newRoleName, newRolePerms);
     if (success) {
       await fetchRoles(merchantId);
       setNewRoleName("");
-      // Reset permissions
       setNewRolePerms(Object.keys(newRolePerms).reduce((acc, key) => ({ ...acc, [key]: false }), {}));
-      alert("Custom role created successfully!");
+      setRoleMessage({ type: "success", text: "Custom role created successfully!" });
     } else {
-      alert("Failed to create role: " + error);
+      setRoleMessage({ type: "error", text: "Failed to create role: " + error });
     }
     setCreatingRole(false);
   };
@@ -315,6 +316,20 @@ export default function TeamPage() {
                   </div>
                 </div>
               </div>
+
+              {roleMessage && (
+                <div className={`p-3 rounded-lg text-sm font-medium border flex items-center gap-2 ${
+                  roleMessage.type === "success"
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    : "bg-red-50 text-red-600 border-red-100"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    roleMessage.type === "success" ? "bg-emerald-600" : "bg-red-600"
+                  }`} />
+                  {roleMessage.text}
+                </div>
+              )}
+
               <DialogFooter>
                 <Button
                   onClick={handleCreateCustomRole}

@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [bvnNumber, setBvnNumber] = useState("");
   const [kycSubmitting, setKycSubmitting] = useState(false);
   const [kycSuccess, setKycSuccess] = useState(false);
+  const [kycError, setKycError] = useState<string | null>(null);
 
   useEffect(() => {
     getMerchant().then((m) => {
@@ -92,8 +93,9 @@ export default function SettingsPage() {
     if (success) {
       setMerchant({ ...merchant, ...updates, verification_status: "pending" as const });
       setKycSuccess(true);
+      setKycError(null);
     } else {
-      alert("Verification submission failed. Please ensure the database schema is updated. Error: " + error);
+      setKycError("Submission failed: " + error + ". Please ensure your database schema is up to date.");
     }
     setKycSubmitting(false);
   };
@@ -324,6 +326,13 @@ export default function SettingsPage() {
               </span>
             )}
           </Button>
+
+          {kycError && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0 mt-1.5" />
+              {kycError}
+            </div>
+          )}
         </CardContent>
       </Card>
 

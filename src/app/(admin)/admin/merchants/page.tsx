@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Search, ShieldCheck, DollarSign, FileText } from "lucide-react";
+import { Users, Search, ShieldCheck, DollarSign, FileText, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { formatNaira } from "@/lib/calculations";
 import type { Merchant } from "@/lib/types";
@@ -22,10 +31,18 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
+type ModalState = 
+  | { type: "deactivate"; merchant: Merchant }
+  | { type: "reactivate"; merchant: Merchant }
+  | { type: "delete"; merchant: Merchant; confirmName: string; error: string | null }
+  | null;
+
 export default function AdminMerchantsPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [modal, setModal] = useState<ModalState>(null);
+  const [processing, setProcessing] = useState(false);
 
   const fetchMerchants = () => {
     setLoading(true);
@@ -43,28 +60,35 @@ export default function AdminMerchantsPage() {
     fetchMerchants();
   }, []);
 
-  const handleDeactivate = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to deactivate ${name}? They will lose dashboard access immediately.`)) {
-      await adminDeactivateMerchantAction(id);
-      fetchMerchants();
-    }
+  const handleConfirmDeactivate = async () => {
+    if (modal?.type !== "deactivate") return;
+    setProcessing(true);
+    await adminDeactivateMerchantAction(modal.merchant.id);
+    fetchMerchants();
+    setModal(null);
+    setProcessing(false);
   };
 
-  const handleReactivate = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to reactivate ${name}? They will regain access.`)) {
-      await adminReactivateMerchantAction(id);
-      fetchMerchants();
-    }
+  const handleConfirmReactivate = async () => {
+    if (modal?.type !== "reactivate") return;
+    setProcessing(true);
+    await adminReactivateMerchantAction(modal.merchant.id);
+    fetchMerchants();
+    setModal(null);
+    setProcessing(false);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    const promptName = prompt(`DANGER: To permanently delete ${name} and ALL their data, type the business name:`);
-    if (promptName === name) {
-      await adminDeleteMerchantAction(id);
-      fetchMerchants();
-    } else if (promptName !== null) {
-      alert("Business name did not match. Deletion cancelled.");
+  const handleConfirmDelete = async () => {
+    if (modal?.type !== "delete") return;
+    if (modal.confirmName !== modal.merchant.business_name) {
+      setModal({ ...modal, error: "Business name did not match. Please try again." });
+      return;
     }
+    setProcessing(true);
+    await adminDeleteMerchantAction(modal.merchant.id);
+    fetchMerchants();
+    setModal(null);
+    setProcessing(false);
   };
 
   const filtered = merchants.filter(
@@ -171,16 +195,16 @@ export default function AdminMerchantsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {m.verification_status === "suspended" ? (
-                          <DropdownMenuItem className="cursor-pointer text-emerald-600" onClick={() => handleReactivate(m.id, m.business_name)}>
+                          <DropdownMenuItem className="cursor-pointer text-emerald-600" onClick={() => setModal({ type: "reactivate", merchant: m })}>
                             <CheckCircle2 className="mr-2 h-4 w-4" /> Reactivate Access
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem className="cursor-pointer text-amber-600" onClick={() => handleDeactivate(m.id, m.business_name)}>
+                          <DropdownMenuItem className="cursor-pointer text-amber-600" onClick={() => setModal({ type: "deactivate", merchant: m })}>
                             <Ban className="mr-2 h-4 w-4" /> Deactivate / Suspend
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer text-red-600" onClick={() => handleDelete(m.id, m.business_name)}>
+                        <DropdownMenuItem className="cursor-pointer text-red-600" onClick={() => setModal({ type: "delete", merchant: m, confirmName: "", error: null })}>
                           <Trash2 className="mr-2 h-4 w-4" /> Delete Permanently
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -190,7 +214,7 @@ export default function AdminMerchantsPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-neutral-500 text-sm">
+                  <TableCell colSpan={7} className="text-center py-8 text-neutral-500 text-sm">
                     No merchants found.
                   </TableCell>
                 </TableRow>
@@ -199,6 +223,93 @@ export default function AdminMerchantsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Deactivate Modal */}
+      <Dialog open={modal?.type === "deactivate"} onOpenChange={(open) => !open && setModal(null)}>
+        <DialogContent className="border-2 border-amber-200">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Ban className="h-5 w-5 text-amber-600" />
+              </div>
+              <DialogTitle className="text-amber-700">Suspend Merchant</DialogTitle>
+            </div>
+            <DialogDescription className="pt-3">
+              Are you sure you want to suspend <strong>{modal?.type === "deactivate" ? modal.merchant.business_name : ""}</strong>? They will immediately lose access to their dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setModal(null)} disabled={processing} className="border-2">Cancel</Button>
+            <Button onClick={handleConfirmDeactivate} disabled={processing} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+              {processing ? "Suspending..." : "Suspend Merchant"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reactivate Modal */}
+      <Dialog open={modal?.type === "reactivate"} onOpenChange={(open) => !open && setModal(null)}>
+        <DialogContent className="border-2 border-emerald-200">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              </div>
+              <DialogTitle className="text-emerald-700">Reactivate Merchant</DialogTitle>
+            </div>
+            <DialogDescription className="pt-3">
+              Reactivate <strong>{modal?.type === "reactivate" ? modal.merchant.business_name : ""}</strong>? They will immediately regain full access to their dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setModal(null)} disabled={processing} className="border-2">Cancel</Button>
+            <Button onClick={handleConfirmReactivate} disabled={processing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+              {processing ? "Reactivating..." : "Reactivate Merchant"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Modal */}
+      <Dialog open={modal?.type === "delete"} onOpenChange={(open) => !open && setModal(null)}>
+        <DialogContent className="border-2 border-red-200">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <DialogTitle className="text-red-600">Permanently Delete Merchant</DialogTitle>
+            </div>
+            <DialogDescription className="pt-3">
+              This will permanently delete <strong>{modal?.type === "delete" ? modal.merchant.business_name : ""}</strong> and <strong>ALL their data</strong> — invoices, clients, team members, and payments. This action <strong>cannot be undone</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-2">
+            <Label className="text-sm font-semibold text-neutral-700">
+              Type the business name to confirm: <span className="text-red-600 font-mono">{modal?.type === "delete" ? modal.merchant.business_name : ""}</span>
+            </Label>
+            <Input
+              value={modal?.type === "delete" ? modal.confirmName : ""}
+              onChange={(e) => modal?.type === "delete" && setModal({ ...modal, confirmName: e.target.value, error: null })}
+              placeholder="Type business name exactly..."
+              className="border-2 border-red-200 focus:border-red-400"
+            />
+            {modal?.type === "delete" && modal.error && (
+              <p className="text-sm text-red-600 font-medium">{modal.error}</p>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setModal(null)} disabled={processing} className="border-2">Cancel</Button>
+            <Button
+              onClick={handleConfirmDelete}
+              disabled={processing || (modal?.type === "delete" ? modal.confirmName !== modal.merchant.business_name : true)}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50"
+            >
+              {processing ? "Deleting..." : "Delete Permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

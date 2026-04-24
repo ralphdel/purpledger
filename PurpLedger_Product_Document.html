@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>PurpLedger — Product Document</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12pt; color: #1a1a2e; line-height: 1.7; padding: 40px 60px; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 26pt; color: #4C1D95; border-bottom: 3px solid #4C1D95; padding-bottom: 10px; margin: 30px 0 15px; page-break-before: always; }
+  h1:first-of-type { page-break-before: avoid; }
+  h2 { font-size: 16pt; color: #5B21B6; border-left: 4px solid #8B5CF6; padding-left: 10px; margin: 25px 0 12px; }
+  h3 { font-size: 13pt; color: #4C1D95; margin: 18px 0 8px; }
+  p { margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 10pt; }
+  th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+  tr:nth-child(even) { background: #f5f3ff; }
+  tr:first-child { background: #4C1D95; color: white; font-weight: bold; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 10pt; color: #7C3AED; }
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 16px; border-radius: 8px; margin: 12px 0; overflow-x: auto; font-size: 9pt; border-left: 4px solid #4C1D95; }
+  pre code { background: none; color: inherit; padding: 0; }
+  ul, ol { margin: 8px 0 8px 24px; }
+  li { margin: 4px 0; }
+  hr { border: none; border-top: 2px solid #e5e7eb; margin: 24px 0; }
+  strong { color: #3730a3; }
+  .alert { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; border-radius: 4px; }
+  blockquote { border-left: 4px solid #8B5CF6; padding-left: 12px; color: #4b5563; font-style: italic; margin: 12px 0; }
+  .cover { text-align: center; padding: 80px 0; }
+  .cover h1 { border: none; font-size: 36pt; page-break-before: avoid; }
+  .cover .subtitle { font-size: 14pt; color: #6B7280; margin-top: 12px; }
+  .cover .meta { margin-top: 40px; font-size: 11pt; color: #9CA3AF; }
+  @media print {
+    body { padding: 20px 40px; }
+    h1 { page-break-before: always; }
+    h1:first-of-type { page-break-before: avoid; }
+    pre { page-break-inside: avoid; }
+    table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div style="display:inline-block;background:#4C1D95;color:white;padding:12px 28px;border-radius:30px;font-size:11pt;font-weight:bold;letter-spacing:2px;margin-bottom:30px;">CONFIDENTIAL — INTERNAL USE ONLY</div>
+  <h1 style="font-size:40pt;border:none;">PurpLedger</h1>
+  <div class="subtitle">Comprehensive Product Document</div>
+  <div class="subtitle" style="color:#8B5CF6;font-weight:bold;">The Smart Ledger for Modern Collections</div>
+  <div class="meta">
+    <div>Version 1.2 &nbsp;|&nbsp; April 2026</div>
+    <div style="margin-top:8px;">Status: Production-Ready (Pre-Launch)</div>
+    <div style="margin-top:8px;">Stack: Next.js 16 &nbsp;·&nbsp; Supabase &nbsp;·&nbsp; Paystack &nbsp;·&nbsp; Brevo &nbsp;·&nbsp; Gemini AI</div>
+  </div>
+</div>
+
+<h1>PurpLedger — Comprehensive Product Document</h1></p><p>> <strong>Version:</strong> 1.2 (April 2026) | <strong>Status:</strong> Production-Ready (Pre-Launch)</p><p><hr/></p><p><h2>1. Product Overview</h2></p><p><strong>PurpLedger</strong> is a fintech SaaS platform built for Nigerian SMEs and freelancers to create invoices, track partial payments, manage team access, and receive payments online. The core differentiator is its <strong>proportional payment engine</strong> — when a client makes a partial payment, every line item (subtotal, tax, discount, and Paystack fee) is settled proportionally, ensuring financial accuracy at every step.</p><p><h3>Mission</h3>
+<p>To eliminate spreadsheet-based invoice tracking and give every small business a professional, compliance-first invoicing and payment system with no technical overhead.</p><p><h3>Core Value Propositions</h3></p>
+<table><tr><td>Feature</td><td>Benefit</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Proportional Payment Engine</td><td>Every partial payment is mathematically allocated — no revenue leakage</td></tr>
+<tr><td>Branded Public Payment Portal</td><td>Clients pay directly from a shareable link without creating an account</td></tr>
+<tr><td>Tiered KYC + Verification</td><td>Businesses go from ₦0 to ₦500k/month to unlimited collections with identity proofs</td></tr>
+<tr><td>RBAC Team Management</td><td>Business owners can invite staff with custom roles and granular permissions</td></tr>
+<tr><td>Super Admin Watchtower</td><td>Platform admins can monitor, verify, suspend, and manage all merchants</td></tr>
+<tr><td>AI Invoice Assistant (PurpBot)</td><td>Read-only Gemini AI to answer questions about business data</td></tr>
+<tr><td>Automated Email Reminders</td><td>Standard, urgent, and overdue reminder emails via Brevo API</td></tr></p><p><hr/></p><p><h2>2. Software Stack</h2></p><p><h3>Frontend</h3>
+<tr><td>Layer</td><td>Technology</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Framework</td><td><strong>Next.js 16.3 (Turbopack, App Router)</strong></td></tr>
+<tr><td>Language</td><td><strong>TypeScript</strong></td></tr>
+<tr><td>UI Library</td><td><strong>shadcn/ui</strong> (base-ui primitives)</td></tr>
+<tr><td>Styling</td><td><strong>Tailwind CSS</strong> (custom <code>purp-*</code> color palette)</td></tr>
+<tr><td>Icons</td><td><strong>Lucide React</strong></td></tr>
+<tr><td>Fonts</td><td>System/Arial (email), Tailwind defaults (app)</td></tr></p><p><h3>Backend</h3>
+<tr><td>Layer</td><td>Technology</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Database</td><td><strong>Supabase (PostgreSQL)</strong></td></tr>
+<tr><td>Auth</td><td><strong>Supabase Auth</strong> (email/password, OTP sessions)</td></tr>
+<tr><td>File Storage</td><td><strong>Supabase Storage</strong> (KYC documents)</td></tr>
+<tr><td>Server Actions</td><td><strong>Next.js Server Actions</strong> (<code>"use server"</code>)</td></tr>
+<tr><td>API Routes</td><td><strong>Next.js Route Handlers</strong> (<code>/api/*</code>)</td></tr>
+<tr><td>Payments</td><td><strong>Paystack</strong> (webhook-driven, idempotent)</td></tr>
+<tr><td>Email</td><td><strong>Brevo (Sendinblue)</strong> REST API</td></tr>
+<tr><td>AI</td><td><strong>Google Gemini API</strong> (read-only PurpBot)</td></tr>
+<tr><td>Cron Jobs</td><td><strong>Next.js API Route</strong> (<code>/api/cron/invoice-reminders</code>)</td></tr></p><p><h3>Infrastructure</h3>
+<tr><td>Concern</td><td>Solution</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Hosting</td><td><strong>Vercel</strong> (target deployment)</td></tr>
+<tr><td>Environment</td><td><code>.env.local</code> (NEXT_PUBLIC_APP_URL, SUPABASE_*, BREVO_*, PAYSTACK_*)</td></tr>
+<tr><td>Build Tool</td><td>Turbopack (Next.js 16 canary)</td></tr>
+<tr><td>Auth Middleware</td><td><code>src/middleware.ts</code> (route protection)</td></tr></p><p><hr/></p><p><h2>3. Software Architecture</h2></p><p>``<code>
+<p>┌─────────────────────────────────────────────────────────────┐</p>
+<p>│                        Next.js App                         │</p>
+<p>│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │</p>
+<p>│  │ (auth) group │  │(dashboard)   │  │  (admin) group   │  │</p>
+<p>│  │  /login      │  │ /dashboard   │  │  /admin/*        │  │</p>
+<p>│  │  /register   │  │ /invoices    │  │  Watchtower UI   │  │</p>
+<p>│  │  /set-password│  │ /clients    │  └──────────────────┘  │</p>
+<p>│  │  /suspended  │  │ /team        │                         │</p>
+<p>│  │  /forgot-pw  │  │ /settings    │  ┌──────────────────┐  │</p>
+<p>│  │  /reset-pw   │  │ /purpbot     │  │   /pay/[id]      │  │</p>
+<p>│  └──────────────┘  └──────────────┘  │  Public Portal   │  │</p>
+<p>│                                       └──────────────────┘  │</p>
+<p>│  ┌────────────────────────────────────────────────────────┐  │</p>
+<p>│  │              src/lib/ (Shared Backend Logic)           │  │</p>
+<p>│  │  actions.ts   data.ts   types.ts   calculations.ts     │  │</p>
+<p>│  │  brevo.ts     utils.ts                                 │  │</p>
+<p>│  └────────────────────────────────────────────────────────┘  │</p>
+<p>│  ┌────────────────────────────────────────────────────────┐  │</p>
+<p>│  │              src/middleware.ts (Route Guard)           │  │</p>
+<p>│  │  Checks auth, merchant role, must_change_password      │  │</p>
+<p>│  └────────────────────────────────────────────────────────┘  │</p>
+<p>└─────────────────────────────────────────────────────────────┘</p>
+<p>                            │</p>
+<p>            ┌───────────────┼──────────────┐</p>
+<p>            ▼               ▼              ▼</p>
+<p>     Supabase DB       Brevo API      Paystack API</p>
+<p>     (Postgres)     (Transactional   (Payment Gateway)</p>
+<p>     Auth + RLS        Emails)</p>
+</code>`<code></p><p><h3>Key Architectural Decisions</h3></p><p><li><strong>Server Actions over API Routes for mutations</strong> — All form submissions and data mutations use </code>"use server"<code> Server Actions in </code>src/lib/actions.ts<code>. This eliminates CSRF concerns and keeps logic server-side.</li>
+<li><strong>Service Client for admin operations</strong> — </code>getServiceClient()<code> (Supabase service role key) bypasses RLS only inside trusted server actions where application-level scoping (</code>.eq("merchant_id", ...)<code>) provides the security boundary.</li>
+<li><strong>Standard client for reads</strong> — </code>createClient()<code> uses the session-scoped Supabase client for reads; RLS policies ensure data isolation between merchants.</li>
+<li><strong>Proportional Payment is server-enforced</strong> — </code>calculateProportionalPayment()<code> in </code>calculations.ts<code> runs on the server inside the webhook handler and is never trusted from the client.</li></p><p><hr/></p><p><h2>4. Database Architecture</h2></p><p><h3>Core Tables</h3></p><p></code>`<code>
+<p>merchants</p>
+<p>├── id (uuid, PK)</p>
+<p>├── user_id (uuid, FK → auth.users)</p>
+<p>├── workspace_code (text, unique) ← "Business ID" shown to users</p>
+<p>├── business_name, email, phone, logo_url</p>
+<p>├── fee_absorption_default ("business" | "customer")</p>
+<p>├── verification_status ("unverified"|"pending"|"verified"|"rejected"|"suspended")</p>
+<p>├── merchant_tier ("starter"|"individual"|"corporate")</p>
+<p>├── cac_number, bvn, cac_document_url, utility_document_url</p>
+<p>├── cac_status, utility_status, bvn_status</p>
+<p>├── monthly_collection_limit (₦ cap, 0 = unlimited)</p>
+<p>└── holds_pending_review (bool)</p><p>clients</p>
+<p>├── id (uuid, PK)</p>
+<p>├── merchant_id (FK → merchants)</p>
+<p>├── full_name, email, phone, company_name</p>
+<p>└── is_deleted (soft delete)</p><p>invoices</p>
+<p>├── id (uuid, PK)</p>
+<p>├── merchant_id, client_id (FKs)</p>
+<p>├── invoice_number (unique per merchant)</p>
+<p>├── status ("open"|"partially_paid"|"closed"|"manually_closed"|"expired"|"void")</p>
+<p>├── subtotal, discount_pct/value, tax_pct/value, grand_total</p>
+<p>├── amount_paid, outstanding_balance (server-computed)</p>
+<p>├── fee_absorption ("business"|"customer")</p>
+<p>├── pay_by_date, short_link, qr_code_url, notes</p>
+<p>└── manual_close_reason</p><p>line_items</p>
+<p>├── id, invoice_id (FK)</p>
+<p>├── item_name, quantity, unit_rate, line_total</p>
+<p>└── sort_order</p><p>transactions</p>
+<p>├── id (uuid, PK)</p>
+<p>├── invoice_id, merchant_id (FKs)</p>
+<p>├── amount_paid, k_factor (proportional ratio)</p>
+<p>├── tax_collected, discount_applied, paystack_fee</p>
+<p>├── fee_absorbed_by</p>
+<p>├── paystack_reference (idempotency key)</p>
+<p>├── payment_method, status</p>
+<p>└── created_at</p><p>merchant_team</p>
+<p>├── id (uuid, PK)</p>
+<p>├── merchant_id (FK → merchants)</p>
+<p>├── user_id (FK → auth.users)</p>
+<p>├── role_id (FK → roles)</p>
+<p>├── is_active (bool)</p>
+<p>├── must_change_password (bool) ← forces /set-password on first login</p>
+<p>├── invited_by (FK → auth.users)</p>
+<p>└── added_at</p><p>roles</p>
+<p>├── id (uuid, PK)</p>
+<p>├── name (text)</p>
+<p>├── permissions (jsonb) ← granular per-feature flags</p>
+<p>└── is_system_role (bool)</p><p>audit_logs</p>
+<p>├── id, event_type</p>
+<p>├── actor_id, actor_role ("merchant"|"admin"|"system")</p>
+<p>├── target_id, target_type</p>
+<p>└── metadata (jsonb)</p>
+</code>`<code></p><p><h3>Row Level Security (RLS) Strategy</h3>
+<ul><li><strong>Merchants</strong> can only </code>SELECT/UPDATE<code> their own row.</li>
+<li><strong>Invoices/Clients/Transactions</strong> are scoped to </code>merchant_id = auth.uid()<code> via RLS.</li>
+<li><strong>Admin operations</strong> (suspend, delete, verify) use the Supabase <strong>service role key</strong> inside Next.js Server Actions — never exposed client-side.</li>
+<li><strong>Team members</strong> see data under their employer's </code>merchant_id<code>, not their own.</li></p><p><hr/></p><p><h2>5. Customer Journey</h2></p><p><h3>Journey A: New Merchant (Business Owner)</h3></p><p></code>`<code>
+<li>Lands on marketing page (/)</li>
+<li>Clicks "Get Started" → /register</li>
+<p>   └── Creates account with email + password + business name</p>
+<p>   └── Supabase creates auth.user + trigger creates merchants row</p>
+<li>Directed to /dashboard (Starter tier, ₦0 collection limit)</li>
+<li>Creates first client → /clients</li>
+<li>Creates first invoice → /invoices/create</li>
+<p>   └── Sets line items, discount, tax, fee absorption</p>
+<p>   └── Invoice gets unique invoice_number + short_link</p>
+<li>Shares payment link with client (WhatsApp / copy link / QR)</li>
+<li>Client pays via /pay/[invoiceId] (no account needed)</li>
+<li>Paystack webhook fires → transaction recorded proportionally</li>
+<li>Invoice status auto-updates (open → partially_paid → closed)</li>
+<li>Goes to /settings → submits BVN (Tier 1 → ₦500k/month)</li>
+<li>Admin reviews KYC → approves → Tier 2 unlocked (unlimited)</li>
+</code>`<code></p><p><h3>Journey B: Invited Team Member</h3></p><p></code>`<code>
+<li>Business owner goes to /team</li>
+<li>Clicks "Invite Member" → enters email + selects role</li>
+<li>System creates Supabase auth user with temp password</li>
+<li>Brevo sends branded invite email with:</li>
+<p>   - Business ID (workspace_code)</p>
+<p>   - Temp password (one-time use)</p>
+<p>   - Step-by-step login instructions</p>
+<p>   - "Accept Invitation →" CTA button</p>
+<li>Team member goes to /login</li>
+<p>   - Enters email + temp password + Business ID</p>
+<li>Middleware detects must_change_password = true</li>
+<li>Redirected to /set-password</li>
+<li>Sets permanent password → must_change_password cleared</li>
+<li>Redirected to /dashboard (scoped to employer's business)</li>
+</code>`<code></p><p><h3>Journey C: Client Making a Payment</h3></p><p></code>`<code>
+<li>Receives payment link from merchant (email/WhatsApp)</li>
+<li>Opens /pay/[invoiceId] (no login required)</li>
+<li>Sees invoice summary, business name, outstanding balance</li>
+<li>Enters payment amount (or clicks 25% / 50% / Full)</li>
+<li>Sees proportional breakdown (tax, discount, Paystack fee)</li>
+<li>Clicks "Pay ₦X"</li>
+<li>(Currently: Demo mode via /api/demo-payment)</li>
+<li>(Production: Paystack inline checkout)</li>
+<li>Success screen shows payment confirmation</li>
+<li>Merchant's dashboard reflects updated balance in real-time</li>
+</code>`<code></p><p><h3>Journey D: Super Admin (Watchtower)</h3></p><p></code>`<code>
+<li>Admin logs in at /login with admin credentials</li>
+<li>Middleware checks admin role → routed to /admin</li>
+<li>Views KYC queue at /admin/verification</li>
+<p>   - Reviews CAC, BVN, utility bill per merchant</p>
+<p>   - Approves/rejects individual documents</p>
+<p>   - Notes trigger automatic tier upgrade</p>
+<li>Views all merchants at /admin/merchants</li>
+<p>   - Suspends merchants (modal confirmation)</p>
+<p>   - Permanently deletes merchants (type-to-confirm modal)</p>
+<p>   - Reactivates suspended accounts</p>
+<li>Views audit trail at /admin/audit</li>
+<li>Views system health at /admin/health</li>
+</code>`<code></p><p><hr/></p><p><h2>6. Integrations & Current State</h2></p><p><tr><td>Integration</td><td>Purpose</td><td>Current State</td></tr>
+<tr><td>---</td><td>---</td><td>---</td></tr>
+<tr><td><strong>Supabase Auth</strong></td><td>User login, session management, JWT</td><td>✅ <strong>Live & Fully Operational</strong></td></tr>
+<tr><td><strong>Supabase Database</strong></td><td>All business data, RLS policies</td><td>✅ <strong>Live & Fully Operational</strong></td></tr>
+<tr><td><strong>Supabase Storage</strong></td><td>KYC document uploads (CAC, utility)</td><td>✅ <strong>Live</strong> (upload working)</td></tr>
+<tr><td><strong>Brevo (Sendinblue)</strong></td><td>Invite emails, password reset emails, invoice reminders</td><td>✅ <strong>Live</strong> — API key configured in </code>.env.local<code></td></tr>
+<tr><td><strong>Paystack Webhooks</strong></td><td>Payment processing, idempotent recording</td><td>⚠️ <strong>Partially Integrated</strong> — webhook handler live at </code>/api/webhooks/paystack<code>, but Paystack inline checkout replaced with Demo endpoint for testing</td></tr>
+<tr><td><strong>Paystack Inline</strong></td><td>Client-facing payment checkout</td><td>🔶 <strong>Demo Mode</strong> — </code>/api/demo-payment<code> simulates payment without card</td></tr>
+<tr><td><strong>Google Gemini API</strong></td><td>PurpBot AI assistant (read-only)</td><td>✅ <strong>Live</strong> — answers questions about the merchant's own data</td></tr>
+<tr><td><strong>Vercel Cron</strong></td><td>Invoice reminder emails (daily trigger)</td><td>✅ <strong>Route live</strong> at </code>/api/cron/invoice-reminders<code> — needs Vercel cron config in </code>vercel.json<code></td></tr></p><p><hr/></p><p><h2>7. Security Architecture</h2></p><p><h3>Authentication Flow</h3>
+<li>Sessions managed by Supabase JWTs with </code>httpOnly<code> cookies</li>
+<li>Middleware (</code>src/middleware.ts<code>) validates every protected route:</li>
+<p>  - Unauthenticated → </code>/login<code></p>
+<p>  - </code>must_change_password = true<code> → </code>/set-password<code></p>
+<p>  - Admin routes check </code>actor_role = "admin"<code> in the merchants table</p>
+<p>  - Suspended merchants → </code>/suspended<code></p><p><h3>Access Control</h3></p>
+<li><strong>Merchants</strong> can only access their own data (enforced at DB + app level)</li>
+<li><strong>Team Members</strong> are scoped to their employer's </code>merchant_id<code></li>
+<li><strong>Super Admins</strong> use Supabase service role only inside server-side actions</li>
+<li><strong>Public Payment Portal</strong> (</code>/pay/*<code>) requires no authentication — data is validated server-side by invoice ID</li></p><p><h3>One-Time Temp Password Flow</h3>
+<li>On invite, a cryptographically random temp password is generated</li>
+<li>Supabase auth user created with </code>email_confirm: true<code> (bypasses email OTP)</li>
+<li></code>must_change_password = true<code> stored in </code>merchant_team<code></li>
+<li>On first login, middleware intercepts and redirects to </code>/set-password<code></li>
+<li>After setting new password, </code>must_change_password<code> cleared in DB</li></p><p><h3>Data Integrity</h3>
+<li>Invoice </code>outstanding_balance<code> is computed server-side from transactions</li>
+<li></code>k_factor<code> (proportional ratio) is stored per-transaction for auditability</li>
+<li>Paystack </code>paystack_reference<code> field prevents duplicate payment recording</li>
+<li>Manual close reasons are from a locked enum to prevent arbitrary entries</li></ul></p><p><hr/></p><p><h2>8. Feature Inventory</h2></p><p><h3>Merchant Dashboard Features</h3>
+<tr><td>Feature</td><td>Status</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Dashboard overview (revenue, invoices, recent activity)</td><td>✅ Live</td></tr>
+<tr><td>Invoice creation (line items, tax, discount, fee absorption)</td><td>✅ Live</td></tr>
+<tr><td>Invoice management (list, filter, void, manual close)</td><td>✅ Live</td></tr>
+<tr><td>Invoice sharing (copy link, QR code, WhatsApp)</td><td>✅ Live</td></tr>
+<tr><td>Client management (create, view, statistics)</td><td>✅ Live</td></tr>
+<tr><td>Partial payment tracking</td><td>✅ Live</td></tr>
+<tr><td>KYC submission (BVN, CAC, utility bill)</td><td>✅ Live</td></tr>
+<tr><td>Business profile settings</td><td>✅ Live</td></tr>
+<tr><td>Team invitations (RBAC with custom roles)</td><td>✅ Live</td></tr>
+<tr><td>Team member management (deactivate, reactivate, remove)</td><td>✅ Live</td></tr>
+<tr><td>Password reset (branded email via Brevo)</td><td>✅ Live</td></tr>
+<tr><td>PurpBot AI assistant</td><td>✅ Live</td></tr>
+<tr><td>Invoice reminder emails (standard/urgent/overdue)</td><td>✅ Live</td></tr></p><p><h3>Admin (Watchtower) Features</h3>
+<tr><td>Feature</td><td>Status</td></tr>
+<tr><td>---</td><td>---</td></tr>
+<tr><td>Merchant directory with search</td><td>✅ Live</td></tr>
+<tr><td>KYC document review queue</td><td>✅ Live</td></tr>
+<tr><td>Document approval (per-item: CAC, BVN, utility)</td><td>✅ Live</td></tr>
+<tr><td>Merchant tier auto-upgrade on approval</td><td>✅ Live</td></tr>
+<tr><td>Merchant suspension (modal confirmation)</td><td>✅ Live</td></tr>
+<tr><td>Merchant reactivation</td><td>✅ Live</td></tr>
+<tr><td>Merchant permanent deletion (type-to-confirm modal)</td><td>✅ Live</td></tr>
+<tr><td>Audit log viewer</td><td>✅ Live</td></tr>
+<tr><td>System health monitoring</td><td>✅ Live</td></tr></p><p><hr/></p><p><h2>9. Known Limitations & Roadmap</h2></p><p><tr><td>Item</td><td>Status</td><td>Notes</td></tr>
+<tr><td>---</td><td>---</td><td>---</td></tr>
+<tr><td>Live Paystack Checkout</td><td>🔶 Pending</td><td>Demo mode active; requires PAYSTACK_SECRET_KEY + inline JS integration</td></tr>
+<tr><td>Vercel Cron Config</td><td>🔶 Pending</td><td></code>vercel.json<code> needs cron schedule entry</td></tr>
+<tr><td></code>middleware.ts<code> → </code>proxy.ts` rename</td><td>⚠️ Deprecation warning</td><td>Next.js 16 canary deprecation; non-breaking for now</td></tr>
+<tr><td>Email OTP 2FA</td><td>📋 Roadmap</td><td>Supabase supports this natively</td></tr>
+<tr><td>Mobile App</td><td>📋 Roadmap</td><td>React Native with shared lib</td></tr>
+<tr><td>Multi-currency</td><td>📋 Roadmap</td><td>Currently NGN only</td></tr>
+<tr><td>Paystack Split Payments</td><td>📋 Roadmap</td><td>Platform fee model</td></tr></table></p><p><hr/></p><p>*Generated: April 2026 | PurpLedger v1.2*
+
+
+</body>
+</html>

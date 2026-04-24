@@ -46,6 +46,7 @@ export default function VerificationQueuePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     const sb = createClient();
@@ -144,7 +145,8 @@ export default function VerificationQueuePage() {
       ));
       setSelectedMerchant({ ...merchant, ...updates });
     } else {
-      alert("Failed to update status: " + error);
+      // Show inline error in the panel instead of alert()
+      setReviewError("Failed to update status: " + error);
     }
     setReviewNotes("");
   };
@@ -327,10 +329,16 @@ export default function VerificationQueuePage() {
                       />
                     </div>
                   </div>
+                  {reviewError && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
+                      {reviewError}
+                    </div>
+                  )}
                   <DialogFooter className="gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setSelectedMerchant(null)}
+                      onClick={() => { setSelectedMerchant(null); setReviewError(null); }}
                     >
                       Close Review
                     </Button>
