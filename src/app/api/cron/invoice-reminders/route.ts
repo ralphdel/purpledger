@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (
     process.env.CRON_SECRET &&
-    authHeader !== \`Bearer \${process.env.CRON_SECRET}\`
+    authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
@@ -22,11 +22,11 @@ export async function GET(request: Request) {
     // 1. Fetch all open/partially_paid or expired invoices with client and merchant details
     const { data: invoices, error } = await supabase
       .from("invoices")
-      .select(\`
+      .select(`
         *,
         clients!inner(full_name, email),
         merchants!inner(business_name)
-      \`)
+      `)
       .in("status", ["open", "partially_paid", "expired"]);
 
     if (error) throw error;
@@ -67,8 +67,8 @@ export async function GET(request: Request) {
 
       if (reminderType) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
-        const payLink = \`\${appUrl}/pay/\${invoice.id}\`;
-        const amountDue = \`₦\${Number(invoice.outstanding_balance).toLocaleString()}\`;
+        const payLink = `${appUrl}/pay/${invoice.id}`;
+        const amountDue = `₦${Number(invoice.outstanding_balance).toLocaleString()}`;
         const formattedDueDate = dueDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
         await sendInvoiceReminderEmail(
