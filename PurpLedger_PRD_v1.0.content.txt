@@ -1,0 +1,957 @@
+© 2025  PurpLedger    |  Version  1.0  |  Page  1 of 27
+ 
+ 
+CONFIDENTIAL — INTERNAL USE ONLY 
+ 
+Stack: Next.js 15  ·  Supabase  ·  Paystack  ·  Tailwind CSS  ·  Shadcn/UI 
+ 
+Prepared: June 2025 
+Version 1.0  —  MVP Release 
+DOCUMENT  
+PRODUCT REQUIREMENTS 
+ 
+The Smart Ledger for Modern Collections
+ 
+              PurpLedger
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (0) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  2 of 27
+ 
+ 
+•  Non-functional requirements (performance, security, compliance) 
+•  Data schema and API contracts 
+•  Security architecture and role-based access control 
+•  Super Admin Command Center 
+•  Customer Payment Portal (partial payments, Paystack integration) 
+•  Merchant Dashboard (invoicing, analytics, PurpBot AI) 
+This PRD covers the full feature specification for PurpLedger MVP v1.0, including: 
+1.4 Document Scope 
+ 
+CFO in their pocket." 
+traceable, every partial payment is honoured, and every merchant has the intelligence of a 
+"To be the most accountant-trusted invoicing platform in Africa — where every naira is 
+Vision Statement 
+1.3 Product Vision 
+ 
+bridges this gap. 
+Neither option is acceptable for an accountant or a professional services firm. PurpLedger 
+•  Accept early closure of an invoice, destroying audit integrity 
+•  Issue multiple separate invoices (creating reconciliation chaos) 
+merchants into one of two bad options: 
+installments, request deposits, or settle balances progressively. Existing invoicing tools force 
+Businesses in high-growth markets like Nigeria frequently encounter clients who pay in 
+1.2 Problem Statement 
+ 
+surfacing AI-driven debt recovery insights to the merchant. 
+accepting partial payments, dynamically recalculating tax and discount allocations, and 
+strict 1:1 payment model, PurpLedger treats every invoice as a living ledger — capable of 
+"Rigid Billing" problem endemic to traditional invoicing tools. W hile legacy systems expect a 
+PurpLedger is a specialized invoicing and payment collection platform engineered to solve the 
+1.1 Product Overview 
+ 
+ 
+1. INTRODUCTION & EXECUTIVE SUMMARY
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (1) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  3 of 27
+ 
+•  Access PurpBot for read-only AI financial insights 
+•  Manage their own client list 
+•  Configure global fee absorption settings 
+•  Create, edit, send, and manually close invoices within their account 
+The primary user. Manages their own business context exclusively. 
+Merchant 
+ 
+•  Cannot create invoices or interact with merchant-level data operationally 
+•  View all Manual Closure reasons for audit purposes 
+•  Access platform-wide activity logs for fraud detection 
+•  Perform password resets and resolve account lockouts 
+•  Monitor total transaction volume (GMV) across the platform 
+•  View all registered merchants and their verification status 
+The platform's technical owner. Has read and write access to all platform data. 
+Super Admin 
+2.2 Role Definitions & Permissions 
+ 
+and edge functions. 
+Supabase            Backend-as-a-service providing the PostgreSQL database, auth, 
+USSD transactions. 
+Paystack             Third-party payment processor; handles card, bank transfer, and 
+Owner)              accounts and audit logs. 
+Super Admin (Platform     Technical owner with platform-wide oversight; manages merchant 
+payments. 
+Customers (End Users)     Clients of the merchant who receive invoice links and execute 
+payments via the platform. 
+Merchants (Primary Users)   Business owners who create invoices, manage clients, and collect 
+decisions. 
+Lead PM / Full-Stack Dev    Designs system architecture, writes and ships code, owns technical 
+features. 
+Product Owner         Sets product vision, priorities, and final acceptance criteria for all 
+Stakeholder           Role & Relationship 
+2.1 Stakeholder Map 
+ 
+ 
+2. STAKEHOLDERS & USER ROLES
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (2) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  4 of 27
+ 
+ 
+•  No account creation required; no dashboard access 
+•  Execute payment via Paystack 
+•  Edit the "Amount to Pay" field within allowed bounds 
+•  View their specific invoice via a secure, expiring link 
+Unauthenticated end-user. Interacts only with public invoice payment links. 
+Customer 
+ 
+•  Cannot access another merchant's data under any circumstance 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (3) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  5 of 27
+ 
+CLOSED       confirms. Balance at close may be non-zero. 
+MANUALLY     Merchant clicks Close Manually, provides a mandatory Reason Code, and 
+CLOSED       Sum of all successful payments = Grand Total (System Auto-Close). 
+Grand Total. 
+PARTIALLY PAID  At least one successful payment has been recorded, but sum of payments < 
+OPEN        Invoice created. No payments received. Pay-By date has not passed. 
+Status        Trigger Condition 
+outside the Manual Close workflow. 
+An invoice passes through a strict set of statuses. No manual status override is permitted 
+3.1.2 Invoice Status State Machine 
+ 
+Notes / Terms       Optional freetext field for payment terms, additional context. 
+Inherits from global setting by default. 
+Fee Absorption      Per-invoice override toggle: Business Absorbs vs. Customer Absorbs. 
+auto-deactivates. 
+Pay-By Date       Expiry date for the payment link. After this date, the payment portal 
+Grand Total        Derived field: Subtotal - Discount + Tax. Read-only. 
+monetary value scales proportionally. 
+Tax (%)          Percentage-based tax applied to the post-discount subtotal. Locked % — 
+value scales proportionally. 
+Discount (%)       Percentage-based discount applied to subtotal. Locked % — monetary 
+Subtotal         Auto-calculated sum of all line item totals. Read-only. 
+System auto-calculates line total. 
+Line Items        Dynamic rows: Item Name (text), Quantity (number), Unit Rate (currency). 
+create new client inline. 
+Client           Searchable dropdown from the merchant's saved client list. Option to 
+Uniqueness enforced at the account level. 
+Invoice Number     Toggle between auto-generated UUID or merchant-defined custom string. 
+Field           Specification 
+Merchants can generate professional invoices from the dashboard with the following fields: 
+3.1.1 Invoice Creation 
+3.1 Module A — Smart Invoicing Engine (Merchant-Side) 
+ 
+ 
+3. FUNCTIONAL REQUIREMENTS
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (4) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  6 of 27
+ 
+ 
+Both paths expire simultaneously on the Pay-By date. 
+pointing to the same URL. Designed for print and physical storefronts. 
+•  QR Code: A high-resolution (300dpi minimum) QR code image, downloadable as PNG, 
+sharing via W hatsApp, email, or SMS. 
+•  Digital Link: A unique, short-link URL (e.g., purpledger.app/pay/INV-XXXX) suitable for 
+Every invoice automatically generates two access artifacts: 
+3.1.3 Invoice Access — Dual-Path Distribution 
+ 
+VOID         Merchant voids invoice (pre-payment only). Requires a mandatory reason. 
+automatically. 
+EXPIRED       Pay-By date has passed and invoice is not fully paid. Payment link deactivates 
+Status        Trigger Condition 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (5) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  7 of 27
+ 
+5. Customer clicks "Pay Now." System initiates Paystack transaction. 
+4. If Fee Absorption = Customer: system displays final charge including Paystack fee. 
+breakdown in real-time. 
+3. Customer enters desired Amount to Pay. System recalculates proportional tax/discount 
+2. Customer reviews itemized bill and outstanding balance. 
+1. Customer opens invoice link. Portal validates that link is not expired. 
+3.2.4 Payment Flow 
+ 
+Paystack standard fee: 1.5% + ₦100 (capped at ₦2,000). International cards: 3.9% + ₦100. 
+from the merchant's net settlement. Merchant sees a reduced payout. 
+Business Absorbs    Customer pays exactly the amount they entered. Paystack fee is deducted 
+Amount + Fee. 
+on top of the customer's entered amount. Customer sees and pays: 
+Customer Absorbs    System calculates the Paystack processing fee in real-time. Fee is added 
+Mode           Behaviour 
+Before routing to Paystack, the system applies the fee absorption logic set on the invoice: 
+3.2.3 Paystack Fee Management 
+ 
+recalculated. 
+Rule: Tax % and Discount % are immutable. Only naira values scale. Percentages are NEVER 
+Discount   Applied  in This  Transaction   = k × Total  Invoice  Discount   Value  
+Tax  Collected  in This  Transaction   = k × Total  Invoice  Tax  Value  
+k = P / Outstanding Balance 
+When customer edits Amount to Pay (P): 
+The Proportional Recalculation Formula 
+This is the core differentiator of PurpLedger. The math model operates as follows: 
+3.2.2 Proportional Recalculation Logic 
+ 
+•  An editable Amount to Pay field, defaulting to the full Outstanding Balance 
+•  Outstanding Balance (Grand Total minus sum of prior payments) 
+•  Amount Already Paid (if a prior partial payment exists) 
+•  Itemized breakdown (line items, subtotal, discount, tax, grand total) 
+•  Invoice number and reference 
+•  Merchant business name and logo 
+W hen a customer opens their payment link, they are presented with: 
+3.2.1 Portal Display 
+3.2 Module B — Flexible Payment Portal (Customer-Side) 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (6) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  8 of 27
+ 
+ 
+9. Customer receives payment confirmation (email receipt via Paystack). 
+8. On failure: system displays error message. Invoice status unchanged. 
+outstanding balance. 
+7. On success: system logs the transaction, updates invoice status, recalculates 
+6. Paystack returns webhook confirmation of success or failure. 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (7) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  9 of 27
+ 
+ 
+All manual closure records are permanently visible to the Super Admin for audit purposes. 
+14. Invoice transitions to MANUALLY CLOSED. Payment link deactivates immediately. 
+code, and freetext explanation (if provided). 
+13. System logs: timestamp, merchant ID, invoice ID, outstanding balance at closure, reason 
+12. Merchant confirms the closure. 
+◦  Other (requires freetext explanation, minimum 20 characters) 
+◦  Client Agreement — Paid in Full 
+◦  Duplicate Invoice 
+◦  Goodwill Adjustment 
+◦  Bad Debt W rite-Off 
+◦  Settlement Discount 
+include: 
+11. A modal dialog is presented with a mandatory Reason Code selector. Acceptable codes 
+10. Merchant navigates to the invoice and selects "Close Manually." 
+Manual closure requires all of the following: 
+a small balance is waived as a goodwill gesture). 
+A merchant may choose to manually close an invoice with a non-zero outstanding balance (e.g., 
+3.4.2 Manual Closure Protocol 
+transitions the invoice status to CLOSED. No merchant action is required. 
+successful transactions for an invoice equals the Grand Total, the system automatically 
+The system monitors the payment aggregate for every invoice. W hen the sum of all confirmed 
+3.4.1 Automatic Closure 
+3.4 Module D — Ledger & Manual Closure Protocol 
+ 
+•  Platform Default: Business Absorbs 
+•  Global Account Default → overrides → 
+•  Per-Invoice Setting (if set) → overrides → 
+3.3.3 Fee Hierarchy 
+and takes precedence over the global setting. 
+per-invoice basis using the Fee Absorption toggle. The override is stored on the invoice record 
+W hen creating or editing an invoice, the merchant can override the global default on a 
+3.3.2 Per-Invoice Override 
+setting is applied automatically to all new invoices created. 
+Merchants configure a Global Default fee absorption setting in their account settings. This 
+3.3.1 Global Default 
+3.3 Module C — Fee Management Settings 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (8) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  10  of 27
+ 
+CRITICAL SECURITY RULE 
+3.6.2 Security Architecture — Absolute Read-Only Constraint 
+merchant's own data. 
+acts as a personal financial analyst, capable of answering natural language questions about the 
+PurpBot is an integrated LLM-powered chat interface embedded in the Merchant Dashboard. It 
+3.6.1 Overview 
+3.6 Module F — PurpBot AI Assistant (Read-Only) 
+ 
+balance 
+•  Client detail view: full invoice history, total value invoiced, total collected, outstanding 
+•  Client fields: Full Name, Email, Phone, Company Name, Address 
+•  CRUD operations: Create, Read, Update, and soft-delete client profiles 
+3.5.3 Client Management 
+ 
+Breakdown           Card, Bank Transfer, USSD. 
+Payment Method        Donut chart showing proportion of collections by payment method: 
+Paid, Outstanding, Last Payment Date. 
+balance descending. Columns: Client Name, Total Invoiced, Total 
+Debt History           Sortable, filterable table of clients ordered by total outstanding 
+12M, Custom). 
+Cash Collected (NGN) over a selectable time range (7D, 30D, 3M, 
+Collection vs. Inflow      Dual-line graph comparing Total Invoiced (NGN) against Actual 
+outstanding value in NGN. 
+61–90 days, 90+ days overdue. Each bucket shows total 
+Aging Report          Bar chart segmented into debt buckets: 0–30 days, 31–60 days, 
+Chart / Report          Specification 
+3.5.2 Analytics — Advanced Visualizations 
+ 
+•  Recent activity feed (last 10 transactions across all invoices) 
+•  Number of overdue invoices (past Pay-By date, status ≠ CLOSED) 
+•  Outstanding balance (sum of all open/partial invoices) 
+•  Total collected this month (cash inflow) 
+•  Total invoiced this month vs. prior month (% change) 
+The dashboard home provides an at-a-glance financial health summary: 
+3.5.1 Dashboard Home 
+3.5 Module E — Merchant Dashboard 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (9) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  11 of 27
+ 
+ 
+•  Providing legal or tax compliance advice 
+•  Accessing data from other merchants 
+•  Sending emails or payment reminders on behalf of the merchant 
+•  Creating, editing, or deleting any record 
+3.6.4 Out of Scope for PurpBot 
+ 
+•  Trend analysis: "Is my collections rate improving compared to last month?" 
+•  Aging queries: "How much is outstanding for invoices older than 60 days?" 
+•  Invoice history: "W hat is the full payment history for [Client Name]?" 
+March." 
+•  Client analytics: "W ho is my top-paying client?" / "Show me all overdue invoices for 
+•  Collection summaries: "Give me a summary of my collections this week." 
+3.6.3 Supported Query Types 
+ 
+PurpBot is a READ-ONLY financial analyst. It never writes to the database. 
+path. 
+application  layer. It cannot  be  bypassed   by  any  user  prompt,  admin  override,  or application  code  
+constraint  is enforced   at the Supabase   Row  Level  Security  (RLS)  policy  level and  at the 
+role  has  zero  permission   to execute  INSER T, UPDA  TE, DELETE,   or any  DDL  command.    This  
+PurpBot  operates   with  a database   role  that  is restricted  exclusively  to SELECT   statements.   The  
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (10) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  12  of 27
+ 
+ 
+•  Suspicious activity flags (e.g., rapid invoice creation, unusual partial payment patterns) 
+•  Paystack webhook event log (success, failure, disputes) 
+•  All Manual Closure events with full reason codes and merchant IDs 
+•  Platform-wide activity log: all invoice creations, closures, and voids 
+3.7.3 Audit Log Access 
+ 
+•  Suspend or reinstate merchant accounts with mandatory reason 
+•  Perform secure password resets for locked-out merchants 
+•  View merchant-level invoice and transaction summaries 
+•  View all merchant accounts with verification status (Pending / Verified / Suspended) 
+3.7.2 Merchant Management 
+ 
+•  Flagged/high-risk merchant alerts 
+•  Real-time active sessions count 
+•  Platform GMV (Gross Merchandise Value) — total transaction volume 
+•  Total registered merchants and monthly growth rate 
+3.7.1 Admin Dashboard 
+3.7 Module G — Super Admin Command Center 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (11) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  13  of 27
+ 
+ready
+ 
+payment link
+              without the full balance 
+Customer
+      Pay 50% of my invoice today via the   I can secure my booking  P0 
+browser without logging in
+        friction 
+Customer
+      Open my invoice link on a mobile     I can pay quickly without  P0 
+As a...
+       I want to...               So that...         Priority 
+4.2 Customer User Stories 
+ 
+payment is made
+            cash inflows in real-time 
+Merchant
+      Receive a notification when a partial   I am always aware of    P2 
+filtering tables
+ 
+invoices for March'
+           to call without manually 
+Merchant
+      Ask PurpBot 'Show me overdue      I can quickly identify who  P1 
+collection
+ 
+outstanding invoices
+          clients to contact for debt 
+Merchant
+      View the Aging Report for my       I can prioritize which     P1 
+computer
+ 
+an invoice via W hatsApp
+        if they don't have a 
+Merchant
+      Share a QR code and digital link for   My clients can pay even   P0 
+audit trail
+ 
+maintaining a complete 
+provided reason
+             balances while 
+Merchant
+      Manually close an invoice with a     I can write off small     P1 
+outstanding
+ 
+and what remains 
+partially paid invoice
+          much has been collected 
+Merchant
+      View the full payment history of a     I can track exactly how   P0 
+global default
+ 
+without changing my 
+invoice
+                 to premium clients 
+Merchant
+      Override the fee setting on a specific   I can offer special terms   P1 
+for routine sales
+ 
+setting in my account
+          calculate Paystack fees 
+Merchant
+      Set a global 'Customer Absorbs Fee'   I never have to manually  P0 
+existing books
+ 
+items and a custom invoice number
+   numbering with my 
+Merchant
+      Create an invoice with multiple line    I can maintain consistent  P0 
+As a...
+       I want to...               So that...         Priority 
+4.1 Merchant User Stories 
+ 
+ 
+4. USER STORIES & ACCEPTANCE CRITERIA
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (12) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  14  of 27
+ 
+ 
+suspicious activity
+            from misuse and fraud 
+Admin
+        Flag a merchant account for        I can protect the platform  P2 
+stakeholders
+ 
+health and report to 
+Admin
+        View total platform GMV in real-time   I can monitor platform    P1 
+the database directly
+ 
+password via a secure portal
+      tickets without accessing 
+Admin
+        Reset a locked-out merchant's      I can resolve support    P0 
+adjustments
+ 
+legitimate business 
+reasons
+                 are using the feature for 
+Admin
+        View all merchant Manual Closure    I can audit if merchants   P1 
+As a...
+       I want to...               So that...         Priority 
+4.3 Admin User Stories 
+ 
+link
+ 
+and understand why
+          merchant for an updated 
+Customer
+      See that my payment link has expired  I know to contact the     P1 
+previous partial payment
+        progressively 
+Customer
+      Pay the remaining balance on a      I can clear my full debt    P0 
+base price
+               merchant's system 
+partial payment is split across tax and  I am paying and trust the 
+Customer
+      See a clear breakdown of how my    I understand exactly what  P0 
+As a...
+       I want to...               So that...         Priority 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (13) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  15  of 27
+ 
+client_id
+         UUID       NO   FK → clients.id. 
+merchant_id
+      UUID       NO   FK → merchants.id. 
+id
+            UUID       NO   Primary key. 
+Column
+         Type       Null?  Description 
+5.3 Table: invoices 
+ 
+created_at
+       TIMESTAMPTZ  NO   Record creation timestamp. 
+is_deleted
+        BOOLEAN    NO   Soft-delete flag. Default: false. 
+company_name
+     TEXT       YES   Client's company or organisation. 
+phone
+          TEXT       YES   Client phone number. 
+email
+          TEXT       YES   Client email for invoice delivery. 
+full_name
+        TEXT       NO   Client's full name. 
+merchant_id
+      UUID       NO   FK → merchants.id. Row Level Security enforced. 
+id
+            UUID       NO   Primary key. 
+Column
+         Type       Null?  Description 
+5.2 Table: clients 
+ 
+t_code
+ 
+paystack_subaccoun TEXT
+       YES   Paystack subaccount code for split payments. 
+verification_status
+   TEXT       NO   Enum: 'pending' | 'verified' | 'suspended'. 
+ult
+ 
+fee_absorption_defa TEXT
+       NO   Enum: 'business' | 'customer'. Default: 'business'. 
+Storage.
+ 
+logo_url
+         TEXT       YES   URL to uploaded business logo in Supabase 
+phone
+          TEXT       YES   Business contact number. 
+email
+          TEXT       NO   Login email. Unique across the platform. 
+business_name
+     TEXT       NO   Merchant's trading name. 
+created_at
+       TIMESTAMPTZ  NO   Account creation timestamp. 
+id
+            UUID       NO   Primary key. Auto-generated. 
+Column
+         Type       Null?  Description 
+5.1 Table: merchants 
+ 
+ 
+5. DATA SCHEMA (Supabase / PostgreSQL)
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (14) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  16  of 27
+ 
+)
+ 
+line_total
+        NUMERIC(12,2  NO   Computed: quantity × unit_rate. 
+)
+ 
+unit_rate
+        NUMERIC(12,2  NO   Price per unit in NGN. 
+)
+ 
+quantity
+         NUMERIC(10,3  NO   Item quantity. 
+item_name
+       TEXT       NO   Line item description. 
+invoice_id
+        UUID       NO   FK → invoices.id. 
+id
+            UUID       NO   Primary key. 
+Column
+         Type       Null?  Description 
+5.4 Table: invoice_line_items 
+ 
+updated_at
+       TIMESTAMPTZ  NO   Last update timestamp. 
+created_at
+       TIMESTAMPTZ  NO   Invoice creation timestamp. 
+n
+ 
+manual_close_reaso TEXT
+       YES   Populated only on status = 'manually_closed'. 
+notes
+          TEXT       YES   Optional merchant notes or terms. 
+qr_code_url
+       TEXT       NO   URL to QR code PNG in Supabase Storage. 
+short_link
+        TEXT       NO   Unique short URL for the payment portal. 
+pay_by_date
+      DATE       YES   Link expiry date. 
+fee_absorption
+     TEXT       NO   Enum: 'business' | 'customer'. Per-invoice setting. 
+)
+ 
+outstanding_balance
+  NUMERIC(12,2  NO   grand_total - amount_paid. Auto-updated. 
+)
+ 
+amount_paid
+      NUMERIC(12,2  NO   Running sum of all confirmed payments. Default: 0. 
+)
+ 
+grand_total
+       NUMERIC(12,2  NO   Subtotal - discount_value + tax_value. 
+)
+              100). 
+tax_value
+        NUMERIC(12,2  NO   Computed: (subtotal - discount_value) × (tax_pct / 
+tax_pct
+         NUMERIC(5,2)  NO   Tax percentage. Immutable post-creation. 
+)
+ 
+discount_value
+     NUMERIC(12,2  NO   Computed: subtotal × (discount_pct / 100). 
+discount_pct
+      NUMERIC(5,2)  NO   Discount percentage. Immutable post-creation. 
+)
+ 
+subtotal
+         NUMERIC(12,2  NO   Sum of all line item totals. 
+'manually_closed' | 'expired' | 'void'.
+ 
+status
+          TEXT       NO   Enum: 'open' | 'partially_paid' | 'closed' | 
+invoice_number
+     TEXT       NO   Unique per merchant. Auto or custom. 
+Column
+         Type       Null?  Description 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (15) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  17  of 27
+ 
+created_at
+       TIMESTAMPTZ  NO   Event timestamp. 
+status, new status).
+ 
+metadata
+        JSONB      YES   Structured detail payload (e.g., reason code, prior 
+target_type
+       TEXT       YES   Type of the affected record: 'invoice', 'merchant', etc. 
+target_id
+        UUID       YES   ID of the affected record (invoice, merchant, etc.). 
+actor_role
+        TEXT       NO   Enum: 'merchant' | 'admin'. 
+actor_id
+         UUID       NO   ID of merchant or admin who performed the action. 
+'merchant_suspended'.
+ 
+event_type
+       TEXT       NO   e.g., 'invoice_created', 'invoice_manually_closed', 
+id
+            UUID       NO   Primary key. 
+Column
+         Type       Null?  Description 
+5.6 Table: audit_logs 
+ 
+created_at
+       TIMESTAMPTZ  NO   Transaction timestamp. 
+status
+          TEXT       NO   Enum: 'success' | 'failed' | 'pending'. 
+payment_method
+    TEXT       YES   Enum: 'card' | 'bank_transfer' | 'ussd'. 
+paystack_reference
+   TEXT       NO   Unique Paystack transaction reference. 
+fee_absorbed_by
+    TEXT       NO   Enum: 'business' | 'customer'. 
+)
+ 
+paystack_fee
+      NUMERIC(10,2  NO   Paystack processing fee for this transaction. 
+)
+ 
+discount_applied
+    NUMERIC(12,2  NO   k_factor × invoice.discount_value. 
+)
+ 
+tax_collected
+      NUMERIC(12,2  NO   k_factor × invoice.tax_value. 
+invoice.grand_total.
+ 
+k_factor
+         NUMERIC(8,6)  NO   Proportional factor: amount_paid / 
+)
+ 
+amount_paid
+      NUMERIC(12,2  NO   Amount paid by customer in this transaction. 
+performance.
+ 
+merchant_id
+      UUID       NO   FK → merchants.id. Denormalized for query 
+invoice_id
+        UUID       NO   FK → invoices.id. 
+id
+            UUID       NO   Primary key. 
+Column
+         Type       Null?  Description 
+5.5 Table: transactions 
+ 
+sort_order
+       INT        NO   Display order on invoice. Default: auto-increment. 
+Column
+         Type       Null?  Description 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (16) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  18  of 27
+ 
+ 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (17) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  19  of 27
+ 
+Input           { query: string } — natural language question from merchant. 
+Authentication      Merchant session token required. Requests are scoped to merchant_id. 
+Endpoint         POST /api/purpbot/query 
+Property         Specification 
+6.3 PurpBot AI Endpoint 
+ 
+transfer.success     Log payout confirmation to the merchant's Paystack subaccount. 
+balance. Set status back to 'partially_paid' or 'open'. 
+refund.processed    Log refund. Reverse transaction record. Recalculate invoice outstanding 
+charge.failed       Log failed transaction attempt. Invoice status unchanged. 
+set status = 'closed'. Else set status = 'partially_paid'. 
+invoice.amount_paid and outstanding_balance. If outstanding_balance = 0, 
+charge.success     Verify Paystack signature. Log transaction to transactions table. Update 
+Event           System Action 
+6.2 Paystack Webhook 
+ 
+fee_absorption }. Returns Paystack payment URL. 
+POST /api/invoices/:id/pay   Initiate a Paystack transaction for the given invoice. Body: { amount, 
+customer payment portal. Validates link expiry. 
+GET /api/invoices/:id/public  Public endpoint (no auth). Returns invoice display data for the 
+optional reason_text. Logs to audit_logs. 
+POST /api/invoices/:id/close  Manually close an invoice. Body must include reason_code and 
+CLOSED invoice. 
+date, fee absorption). Cannot edit a CLOSED or MANUALLY 
+PATCH /api/invoices/:id     Update mutable fields on a draft invoice (line items, notes, pay-by 
+Merchant-scoped via RLS. 
+GET /api/invoices/:id      Retrieve a single invoice with all line items and transaction history. 
+QR code. Returns full invoice object. 
+POST /api/invoices       Create a new invoice. Validates all fields. Generates short link and 
+Endpoint             Description 
+6.1 Invoice Endpoints 
+ 
+ 
+6. API CONTRACTS
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (18) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  20  of 27
+ 
+ 
+merchants' data. Violation returns 403. 
+Prohibited Actions    Role cannot execute INSERT, UPDATE, DELETE, or access other 
+Rate Limit         20 queries per merchant per hour to prevent abuse. 
+references. 
+Output          { response: string, citations: object[] } — natural language answer with data 
+data via RLS. 
+Database Role      purpbot_readonly — has SELECT-only permissions on merchant's own 
+Property         Specification 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (19) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  21  of 27
+ 
+•  Automated daily backups of the Supabase database 
+display-only 
+•  All financial calculations performed server-side — client-side amounts treated as 
+database transaction 
+•  Invoice amount_paid and outstanding_balance updated atomically within a single 
+create duplicate transactions 
+•  Paystack webhook events processed idempotently — duplicate webhooks must not 
+7.4 Reliability 
+ 
+•  QR code generation offloaded to edge functions to avoid blocking the main thread 
+•  Stateless API design enables horizontal scaling 
+•  Next.js deployed on Vercel Edge Network for global CDN distribution 
+•  Supabase Postgres handles up to 500 concurrent connections with PgBouncer 
+7.3 Scalability 
+ 
+•  Admin portal protected by separate 2FA-enforced credentials 
+•  HTTPS enforced on all endpoints; HTTP requests redirected 
+codebase 
+•  All sensitive fields (API keys, webhook secrets) stored in environment variables, never in 
+•  Invoice short links use cryptographically random tokens (minimum 16 bytes) 
+•  Paystack webhook signature verification on every incoming webhook 
+•  PurpBot database role restricted to SELECT-only at the PostgreSQL role level 
+records 
+•  Row Level Security (RLS) enforced on all tables — merchants can only access their own 
+•  All API endpoints protected by Supabase Auth JW T tokens 
+7.2 Security 
+ 
+•  PurpBot AI response: < 8 seconds for 95th percentile of queries 
+•  Paystack webhook acknowledgement: < 200ms (Paystack SLA requirement) 
+•  Dashboard analytics charts: render within 2 seconds for up to 10,000 transactions 
+•  Real-time fee recalculation on amount input: < 100ms response 
+•  Payment portal initial load: < 1.5 seconds on 3G mobile connection 
+7.1 Performance 
+ 
+ 
+7. NON-FUNCTIONAL REQUIREMENTS
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (20) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  22  of 27
+ 
+ 
+admin 
+•  Manual closure records permanently retained — cannot be deleted by merchant or 
+•  Audit trail: All financial events are immutably logged in audit_logs with full metadata 
+Nigeria or designated compliant regions 
+•  NDPR (Nigeria Data Protection Regulation): Merchant and customer data stored within 
+to Paystack 
+•  PCI-DSS: Card data never touches PurpLedger servers — all card processing delegated 
+7.5 Compliance 
+ 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (21) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  23  of 27
+ 
+•  Primary breakpoints: Mobile (375px), Tablet (768px), Desktop (1280px) 
+8.4 Responsive Design 
+ 
+•  QR Code: qrcode.react or @ qr-code-styling/core 
+•  Charts: Recharts (lightweight, Tailwind-compatible) 
+•  Icons: Lucide React (consistent, clean icon set) 
+•  Components: Shadcn/UI as the base component library (customized to Purp Standard) 
+•  Styling: Tailwind CSS with custom purp-* color tokens defined in tailwind.config.ts 
+•  Framework: Next.js 15 (App Router) with TypeScript 
+8.3 Component Library 
+ 
+a professional fintech tool. 
+•  PROFESSIONAL DENSITY: Sufficient white space for readability, but dense enough for 
+text). 
+•  HIGH CONTRAST: All text must meet W CAG AA contrast ratio (minimum 4.5:1 for body 
+box-shadows as primary indicators. 
+•  BOLD BORDERS: Use solid 1px or 2px borders in purp-200 or purp-700. No 
+classes permitted. 
+•  NO GRADIENTS: All backgrounds and buttons use flat, solid colors. No gradient utility 
+8.2 Design Principles 
+ 
+white              #FFFFFF — Card surfaces, modal backgrounds 
+neutral-500 (Text Gray)    #6B7280 — Secondary text, captions, metadata 
+neutral-900 (Text Dark)    #1E1B2E — Body text, primary content 
+purp-100 (Light Purple)    #EDE9FE — Table row alternates, input backgrounds 
+purp-50 (Slate White)     #F8F7FF — Page background, card backgrounds 
+purp-200 (Lavender)     #C4B5FD — Borders, subtle backgrounds, disabled states 
+purp-700 (Amethyst)     #7B2FBE — Accent elements, links, chart lines, active states 
+purp-900 (Deep Indigo)    #2D1B6B — Primary headings, primary buttons, navbar background 
+Token             Hex Value / Usage 
+8.1 Color Palette 
+ 
+ 
+8. DESIGN SYSTEM — THE PURP STANDARD
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (22) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  24  of 27
+ 
+ 
+•  Admin Panel: Desktop-only. Minimum 1024px viewport required. 
+•  Merchant Dashboard: Desktop-primary. Responsive down to 768px tablet. 
+•  Payment Portal: Mobile-first. Designed for one-thumb operation on smartphone. 
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (23) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  25  of 27
+ 
+ 
+Admin           End-to-end testing. Performance optimization. Beta deployment. 
+11–12)PurpBot &    Admin command center (merchant management, GMV, audit logs). 
+Sprint 6 (Week      PurpBot AI integration (read-only Supabase role, LLM query processing). 
+Analytics 
+9–10)Dashboard &   Inflow line graph. Debt History table. Client management CRUD. 
+Sprint 5 (Week      Dashboard home with KPI cards. Aging Report bar chart. Collection vs. 
+Closure          enforcement. Invoice Expiry logic (link deactivation). 
+7–8)Fee Logic &     per-invoice override settings. Manual Closure modal with reason code 
+Sprint 4 (Week      Customer Absorbs / Business Absorbs fee toggle. Global default and 
+handler with idempotent transaction logging. Invoice status state machine. 
+5–6)Payment Portal   with live tax/discount breakdown. Paystack payment initiation. W ebhook 
+Sprint 3 (Week      Customer-facing payment portal (public route). Real-time amount editing 
+link and QR code generation. 
+3–4)Invoicing Core    badges. Proportional recalculation engine (server-side math). Invoice short 
+Sprint 2 (Week      Invoice creation form (full field set, line items). Invoice list view with status 
+components. 
+deployment with RLS policies. Design system tokens and base Shadcn 
+1–2)Foundation     flows (Merchant login/register, Admin login with 2FA). Database schema 
+Sprint 1 (Week      Project scaffolding (Next.js 15 + Supabase + Tailwind). Authentication 
+Sprint           Deliverables & Goals 
+ 
+ 
+9. MVP MILESTONES & DELIVERY PLAN
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (24) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  26  of 27
+ 
+ 
+post-launch. W eekly sprint reviews with strict scope gate. 
+non-negotiable for MVP. P1 and P2 features deferred to v1.1 
+Scope creep delaying MVP    Likelihood: HIGH | Impact: MEDIUM | Mitigation: P0 features are 
+₦1,000,000 invoice)        pricing exploitation. 
+payment (paying ₦1 on      minimum payment amount on invoice. Expired links prevent stale 
+Customer abuse of partial    Likelihood: MEDIUM | Impact: LOW  | Mitigation: Merchant can set 
+link)                constraint on short_link column. Retry on collision. 
+(two invoices getting same   secure random token generation (16+ bytes). Uniqueness 
+Invoice short-link collision    Likelihood: LOW  | Impact: HIGH | Mitigation: Cryptographically 
+validation. Impossible to bypass regardless of prompt injection. 
+perform write operations     SELECT-only role enforced in PostgreSQL. Application layer 
+PurpBot AI being prompted to  Likelihood: LOW  | Impact: CRITICAL | Mitigation: Database-level 
+legitimate debt           merchants with high manual close rates. 
+Close feature to write off     reason codes with Admin audit visibility. Anomaly detection for 
+Merchant gaming the Manual  Likelihood: MEDIUM | Impact: MEDIUM | Mitigation: Mandatory 
+customer. Log failed attempts for manual reconciliation. 
+causing payment failures     exponential backoff on webhook retry. Surface clear error state to 
+Paystack API downtime     Likelihood: LOW  | Impact: HIGH | Mitigation: Implement 
+Risk                Likelihood / Impact / Mitigation 
+ 
+ 
+10. RISKS & MITIGATIONS
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (25) Break----------------
+© 2025  PurpLedger    |  Version  1.0  |  Page  27  of 27
+ 
+PurpLedger   PRD  v1.0   ·  Confidential    ·  © 2025  PurpLedger
+ 
+— END OF DOCUMENT — 
+ 
+ 
+for partial payments?       (out of app) in MVP. In-app refund workflow is v1.1. 
+What is the refund workflow   OPEN: Refunds triggered by merchant via Paystack dashboard 
+in-app or handled externally?   flow with admin approval. 
+Is merchant KYC verification  OPEN: Legal review pending. MVP may use a manual verification 
+follow-up emails handled?    Manual sharing via W hatsApp/email is the v1 workflow. 
+How are invoice reminders /   DEFERRED: Automated reminder emails not in MVP scope. 
+feedback. 
+partial payment threshold?    minimum 10% of outstanding) or free-form? Requires merchant 
+Should there be a minimum   OPEN: Product decision — merchant-configurable minimum (e.g., 
+PurpBot?             Supabase AI. Decision pending cost-per-query analysis. 
+What LLM provider powers   OPEN: Options include OpenAI GPT-4o, Anthropic Claude, or 
+MVP? 
+multi-currency invoicing in   deferred to v2.0. 
+Will PurpLedger support     DEFERRED: MVP is NGN-only. Multi-currency (USD, GBP) 
+paying? 
+to create an account before   required. Reduces friction for the core payment use case. 
+Should customers be required DECIDED: No. Customers pay via public link with no account 
+Question              Status / Decision 
+ 
+ 
+11. OPEN QUESTIONS & DECISIONS LOG
+PurpLedger  |  Product  Requirements    Document      CONFIDENTIAL
+ 
+----------------Page (26) Break----------------
