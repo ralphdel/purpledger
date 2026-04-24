@@ -400,6 +400,14 @@ export async function adminDeleteMerchantAction(merchantId: string) {
     .eq("id", merchantId)
     .single();
 
+  // Also delete the Supabase Auth user so the email can be re-used for registration
+  if (merchant?.user_id) {
+    const { error: authError } = await adminClient.auth.admin.deleteUser(merchant.user_id);
+    if (authError) {
+      console.error("Warning: auth user removal failed:", authError.message);
+    }
+  }
+
   // Delete in order to respect FK constraints
   await adminClient.from("merchant_team").delete().eq("merchant_id", merchantId);
   await adminClient.from("transactions").delete().eq("merchant_id", merchantId);
@@ -407,14 +415,6 @@ export async function adminDeleteMerchantAction(merchantId: string) {
   await adminClient.from("clients").delete().eq("merchant_id", merchantId);
   const { error } = await adminClient.from("merchants").delete().eq("id", merchantId);
   if (error) return { success: false, error: error.message };
-
-  // Also delete the Supabase Auth user so the email can be re-used for registration
-  if (merchant?.user_id) {
-    const { error: authError } = await adminClient.auth.admin.deleteUser(merchant.user_id);
-    if (authError) {
-      console.error("Warning: merchant DB deleted but auth user removal failed:", authError.message);
-    }
-  }
 
   revalidatePath("/admin/merchants");
   return { success: true };

@@ -13,6 +13,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   const { invoiceId } = use(params);
   const [invoice, setInvoice] = useState<InvoiceWithLineItems | null>(null);
   const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [monthlyCollected, setMonthlyCollected] = useState(0);
   const [loading, setLoading] = useState(true);
   const [inputAmount, setInputAmount] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -24,6 +25,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
       if (result) {
         setInvoice(result.invoice);
         setMerchant(result.merchant);
+        setMonthlyCollected(result.monthlyCollected);
         setInputAmount(Number(result.invoice.outstanding_balance).toString());
       }
       setLoading(false);
@@ -57,6 +59,9 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   const businessName = merchant?.business_name || "PurpLedger Merchant";
 
   // ── Invoice status logic ──────────────────────────────────────────────────
+  // Check if merchant limit is exceeded
+  const limitExceeded = merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false;
+
   // Manually closed or fully closed → no more payments accepted
   const isManuallyClosed = invoice.status === "manually_closed";
   const isFullyClosed = invoice.status === "closed";
@@ -69,7 +74,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   // We no longer strictly block just because the date passed, 
   // so that reopened invoices stay active until explicitly expired again.
   // Determine if payment should be blocked
-  const isPaymentBlocked = isManuallyClosed || isFullyClosed || isVoid || isExpired;
+  const isPaymentBlocked = isManuallyClosed || isFullyClosed || isVoid || isExpired || limitExceeded;
 
   if (isPaymentBlocked) {
     // Differentiate between "closed" and "link expired"
@@ -85,15 +90,17 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
               {isClosed ? <CheckCircle2 className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
             </div>
             <h1 className="text-xl font-bold text-purp-900">
-              {isClosed ? "Invoice Closed" : "Payment Link Expired"}
+              {limitExceeded ? "Merchant Limit Reached" : isClosed ? "Invoice Closed" : "Payment Link Expired"}
             </h1>
             <p className="text-neutral-500">
-              {isClosed
-                ? "This invoice has been closed by the merchant and no further payments can be accepted."
-                : "This payment link has expired. The invoice is still open, but payments can no longer be accepted through this link."}
+              {limitExceeded
+                ? "This merchant is currently unable to accept further payments at this time. Please contact them directly."
+                : isClosed
+                  ? "This invoice has been closed by the merchant and no further payments can be accepted."
+                  : "This payment link has expired. The invoice is still open, but payments can no longer be accepted through this link."}
             </p>
 
-            {!isClosed && (
+            {!isClosed && !limitExceeded && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-left">
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -107,6 +114,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
                 </div>
               </div>
             )}
+
 
             {isManuallyClosed && invoice.manual_close_reason && (
               <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3 text-left text-sm">

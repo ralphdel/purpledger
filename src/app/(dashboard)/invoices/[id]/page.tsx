@@ -36,7 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { getInvoiceById, getTransactions, getMerchant } from "@/lib/data";
+import { getInvoiceById, getTransactions, getMerchant, getMonthlyCollectionTotal } from "@/lib/data";
 import { closeInvoiceManually, reopenInvoice, getInvoiceHistory, sendInvoiceEmailAction } from "@/lib/actions";
 import { MANUAL_CLOSE_REASONS } from "@/lib/types";
 import type { InvoiceWithLineItems, Transaction, Merchant, AuditLog } from "@/lib/types";
@@ -48,6 +48,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [history, setHistory] = useState<AuditLog[]>([]);
+  const [monthlyCollected, setMonthlyCollected] = useState(0);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [closeReason, setCloseReason] = useState("");
@@ -60,14 +61,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [isPending, startTransition] = useTransition();
 
   const refreshData = async () => {
-    const [inv, txns, merch] = await Promise.all([
+    const [inv, txns, merch, collected] = await Promise.all([
       getInvoiceById(id),
       getTransactions(id),
       getMerchant(),
+      getMonthlyCollectionTotal(),
     ]);
     setInvoice(inv);
     setTransactions(txns);
     setMerchant(merch);
+    setMonthlyCollected(collected);
     if (inv?.clients?.email) setEmailTo(inv.clients.email);
     // Fetch history from server action
     let h = await getInvoiceHistory(id);
@@ -194,7 +197,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   // Whether the invoice can be edited (open, partially_paid, or expired/manually_closed to allow changes before reopening)
   const canEdit = ["open", "partially_paid", "expired", "manually_closed"].includes(invoice.status);
   // Whether the payment link is active
-  const isLinkActive = invoice.status === "open" || invoice.status === "partially_paid";
+  const limitExceeded = merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false;
+  const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") && !limitExceeded;
 
   const statusIcons: Record<string, React.ElementType> = {
     open: Clock, partially_paid: AlertTriangle, closed: CheckCircle,
@@ -465,7 +469,6 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                       <TableHead className="font-bold text-purp-900 text-xs uppercase">Reference</TableHead>
                       <TableHead className="font-bold text-purp-900 text-xs uppercase">Method</TableHead>
                       <TableHead className="font-bold text-purp-900 text-xs uppercase text-right">Amount</TableHead>
-                      <TableHead className="font-bold text-purp-900 text-xs uppercase text-right">k-Factor</TableHead>
                       <TableHead className="font-bold text-purp-900 text-xs uppercase">Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -480,7 +483,6 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                         <TableCell className="text-sm font-mono text-purp-700">{txn.paystack_reference}</TableCell>
                         <TableCell className="text-sm capitalize">{txn.payment_method.replace("_", " ")}</TableCell>
                         <TableCell className="text-right font-semibold text-sm">{formatNaira(Number(txn.amount_paid))}</TableCell>
-                        <TableCell className="text-right text-sm font-mono">{Number(txn.k_factor).toFixed(6)}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 border-2 text-xs font-semibold">
                             {txn.status}
@@ -596,24 +598,26 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
                   <p className="font-medium">Payment link is inactive</p>
                   <p className="mt-0.5">
-                    {invoice.status === "expired" || invoice.status === "manually_closed"
-                      ? "Reopen this invoice to reactivate the payment link."
-                      : "This invoice is closed."}
+                    {limitExceeded
+                      ? "Monthly collection limit reached. Upgrade your tier to accept more payments."
+                      : invoice.status === "expired" || invoice.status === "manually_closed"
+                        ? "Reopen this invoice to reactivate the payment link."
+                        : "This invoice is closed."}
                   </p>
                 </div>
               )}
 
               <div className="flex items-center gap-2">
-                <div className="flex-1 px-3 py-2 bg-purp-50 border-2 border-purp-200 rounded-lg text-xs font-mono text-purp-700 truncate">
+                <div className={`flex-1 px-3 py-2 bg-purp-50 border-2 border-purp-200 rounded-lg text-xs font-mono text-purp-700 truncate ${!isLinkActive ? 'opacity-50' : ''}`}>
                   {displayLink}
                 </div>
-                <Button variant="outline" size="sm" onClick={copyLink} className="border-2 border-purp-200 flex-shrink-0">
+                <Button variant="outline" size="sm" onClick={copyLink} disabled={!isLinkActive} className="border-2 border-purp-200 flex-shrink-0">
                   {copied ? <CheckCircle className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
 
-              <Link href={`/pay/${invoice.id}`} target="_blank">
-                <Button variant="outline" className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100">
+              <Link href={isLinkActive ? `/pay/${invoice.id}` : '#'} target={isLinkActive ? "_blank" : undefined}>
+                <Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100 disabled:opacity-50">
                   <ExternalLink className="mr-2 h-4 w-4" /> Open Payment Portal
                 </Button>
               </Link>
@@ -632,7 +636,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <Button
                 variant="outline"
                 onClick={shareViaWhatsApp}
-                className="w-full border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-medium"
+                disabled={!isLinkActive}
+                className="w-full border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-medium disabled:opacity-50"
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
                 Send via WhatsApp
@@ -641,7 +646,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               {/* Email */}
               <Dialog>
                 <DialogTrigger
-                  render={<Button variant="outline" className="w-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium" />}
+                  disabled={!isLinkActive}
+                  render={<Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium disabled:opacity-50" />}
                 >
                   <Mail className="mr-2 h-4 w-4" />
                   Send via Email

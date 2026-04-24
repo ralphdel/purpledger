@@ -120,6 +120,27 @@ export async function getAllTransactions(merchantId?: string): Promise<Transacti
   return filtered as Transaction[];
 }
 
+export async function getMonthlyCollectionTotal(merchantId?: string): Promise<number> {
+  const mId = merchantId || await getActiveMerchantId();
+  
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  
+  const { data, error } = await supabase()
+    .from("transactions")
+    .select("amount_paid")
+    .eq("merchant_id", mId)
+    .eq("status", "success")
+    .gte("created_at", firstDayOfMonth);
+
+  if (error) {
+    console.error("getMonthlyCollectionTotal:", error);
+    return 0;
+  }
+
+  return (data || []).reduce((sum, tx) => sum + Number(tx.amount_paid), 0);
+}
+
 // ── Dashboard Analytics ─────────────────────────────────────────────────────
 export async function getDashboardStats(merchantId?: string) {
   const mId = merchantId || await getActiveMerchantId();
@@ -207,5 +228,6 @@ export async function getPublicInvoice(invoiceId: string) {
   if (!invoice) return null;
 
   const merchant = await getMerchant(invoice.merchant_id);
-  return { invoice, merchant };
+  const monthlyCollected = await getMonthlyCollectionTotal(invoice.merchant_id);
+  return { invoice, merchant, monthlyCollected };
 }
