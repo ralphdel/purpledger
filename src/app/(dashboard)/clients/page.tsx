@@ -28,6 +28,7 @@ export default function ClientsPage() {
   // New client form state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -63,8 +64,9 @@ export default function ClientsPage() {
   };
 
   const handleSaveClient = async () => {
+    setSaveError(null);
     if (!fullName.trim() || !merchantId) {
-      alert("Full Name is required.");
+      setSaveError("Full Name is required.");
       return;
     }
     
@@ -85,7 +87,7 @@ export default function ClientsPage() {
       setCompanyName("");
       fetchData(); // Refresh the list
     } else {
-      alert("Failed to save client: " + error);
+      setSaveError("Failed to save client: " + error);
     }
     setSavingClient(false);
   };
@@ -165,6 +167,14 @@ export default function ClientsPage() {
                 />
               </div>
             </div>
+            
+            {saveError && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
+                {saveError}
+              </div>
+            )}
+
             <DialogFooter>
               <Button 
                 onClick={handleSaveClient}

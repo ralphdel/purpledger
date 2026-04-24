@@ -447,8 +447,8 @@ export async function createClientAction(clientData: {
   company_name?: string;
   merchant_id: string;
 }) {
-  const supabase = await createClient();
-  const { error } = await supabase
+  const adminClient = getServiceClient();
+  const { error } = await adminClient
     .from("clients")
     .insert([clientData]);
     
