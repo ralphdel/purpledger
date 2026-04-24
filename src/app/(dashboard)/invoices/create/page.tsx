@@ -139,7 +139,7 @@ export default function CreateInvoicePage() {
         .map((li) => {
           const disc = parseFloat(li.discountPct) || 0;
           return {
-            item_name: disc > 0 ? \`\${li.itemName.trim()} (\${disc}% off)\` : li.itemName.trim(),
+            item_name: disc > 0 ? `${li.itemName.trim()} (${disc}% off)` : li.itemName.trim(),
             quantity: parseFloat(li.quantity) || 1,
             unit_rate: (parseFloat(li.unitRate) || 0) * (1 - disc / 100),
           };
