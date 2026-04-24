@@ -168,35 +168,52 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
       } | undefined;
 
       if (handler) {
-        const chargeAmount = invoice.fee_absorption === "customer"
-          ? Math.round(allocation.totalCharge * 100)
-          : Math.round(parsedAmount * 100);
+        try {
+          const chargeAmount = invoice.fee_absorption === "customer"
+            ? Math.round(allocation.totalCharge * 100)
+            : Math.round(parsedAmount * 100);
 
-        const payHandler = handler.setup({
-          key: paystackKey,
-          email: invoice.clients?.email || "customer@purpledger.app",
-          amount: chargeAmount,
-          currency: "NGN",
-          ref: `purp_${invoice.id.slice(0, 8)}_${Date.now()}`,
-          metadata: {
-            invoice_id: invoice.id,
-            invoice_number: invoice.invoice_number,
-            merchant_id: invoice.merchant_id,
-            payment_amount: parsedAmount,
-            k_factor: allocation.kFactor,
-          },
-          callback: async (response: { reference: string }) => {
-            // After Paystack confirms, the webhook handles DB update server-side
-            // We just show success to the user
-            setIsProcessing(false);
-            setSuccess(true);
-          },
-          onClose: () => {
-            setIsProcessing(false);
-          },
-        });
-        payHandler.openIframe();
-        return;
+          const payHandler = handler.setup({
+            key: paystackKey,
+            email: invoice.clients?.email || "customer@purpledger.app",
+            amount: chargeAmount,
+            currency: "NGN",
+            ref: `purp_${invoice.id.slice(0, 8)}_${Date.now()}`,
+            metadata: {
+              invoice_id: invoice.id,
+              invoice_number: invoice.invoice_number,
+              merchant_id: invoice.merchant_id,
+              payment_amount: parsedAmount,
+              k_factor: allocation.kFactor,
+            },
+            callback: function(response: any) {
+              // In local dev, webhooks won't work, so we hit the demo endpoint as a fallback 
+              // to actually record the transaction so it works on localhost.
+              if (window.location.hostname === "localhost") {
+                fetch("/api/demo-payment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    invoiceId: invoice.id,
+                    paymentAmount: parsedAmount,
+                  }),
+                }).catch(e => console.error("Fallback to demo-payment failed", e));
+              }
+              setIsProcessing(false);
+              setSuccess(true);
+            },
+            onClose: function() {
+              setIsProcessing(false);
+            },
+          });
+          payHandler.openIframe();
+          return;
+        } catch (err: any) {
+          console.error("Paystack popup failed to load:", err);
+          setIsProcessing(false);
+          setPaymentError("Payment interface failed to load. Please try again.");
+          return;
+        }
       }
     }
 
