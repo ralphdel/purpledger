@@ -22,16 +22,50 @@ async function logAudit(
   metadata: Record<string, unknown>
 ) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  let actorId = null;
+  let actorName = "System";
+  let actorRole = "merchant"; // default
+  let actorMerchantId = DEMO_MERCHANT_ID;
+
+  if (user) {
+    actorId = user.id;
+    // We fetch the team_members profile to get their name
+    const { data: tm } = await supabase
+      .from("team_members")
+      .select("full_name, role, merchant_id")
+      .eq("user_id", user.id)
+      .single();
+      
+    if (tm) {
+      actorName = tm.full_name;
+      actorRole = tm.role;
+      actorMerchantId = tm.merchant_id;
+    } else {
+      // Fallback for owner if team_members not fully set up
+      const { data: merch } = await supabase
+        .from("merchants")
+        .select("business_name, id")
+        .eq("user_id", user.id)
+        .single();
+      if (merch) {
+        actorName = `${merch.business_name} (Owner)`;
+        actorMerchantId = merch.id;
+      }
+    }
+  }
+
   const { error } = await supabase.from("audit_logs").insert({
     event_type: eventType,
-    actor_id: null, // No auth user in demo mode
-    actor_role: "merchant",
+    actor_id: actorId,
+    actor_role: actorRole,
     target_id: targetId,
     target_type: targetType,
     metadata: { 
       ...metadata, 
-      actor_merchant_id: DEMO_MERCHANT_ID,
-      actor_name: "Adewale (Owner)" // Hardcoded team member name for demo mode
+      actor_merchant_id: actorMerchantId,
+      actor_name: actorName 
     },
   });
   if (error) {
@@ -542,6 +576,12 @@ export async function createInvoiceAction(data: {
     await adminClient.from("invoices").delete().eq("id", invoice.id);
     return { success: false, error: liError.message };
   }
+
+  // Record audit log for creation
+  await logAudit("created", invoice.id, "invoice", {
+    reason: "Invoice created successfully",
+    status: "open"
+  });
 
   revalidatePath("/invoices");
   return { success: true, invoiceId: invoice.id };

@@ -100,6 +100,50 @@ export async function POST(request: Request) {
     console.error("Transaction log failed (non-fatal):", txnError.message);
   }
 
+  // 3. Record audit log
+  await supabase.from("audit_logs").insert({
+    event_type: "payment_received",
+    actor_id: null,
+    actor_role: "system",
+    target_id: invoiceId,
+    target_type: "invoice",
+    metadata: {
+      actor_merchant_id: invoice.merchant_id,
+      actor_name: "System (Payment Gateway)",
+      amount: cappedPayment,
+      reference: demoRef
+    }
+  });
+
+  // 4. Send email receipt
+  if (invoice.clients?.email) {
+    const { sendPaymentReceiptEmail } = await import("@/lib/brevo");
+    const { formatNaira } = await import("@/lib/calculations");
+    const { getMerchant } = await import("@/lib/data");
+    
+    // We need the merchant details. Wait, the demo endpoint doesn't have session.
+    // Let's fetch the merchant record
+    const { data: merchantData } = await supabase
+      .from("merchants")
+      .select("business_name")
+      .eq("id", invoice.merchant_id)
+      .single();
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const paymentUrl = `${appUrl}/pay/${invoice.id}`;
+
+    await sendPaymentReceiptEmail(
+      invoice.clients.email,
+      invoice.clients.full_name || "Valued Client",
+      merchantData?.business_name || "PurpLedger Merchant",
+      invoice.invoice_number,
+      formatNaira(cappedPayment),
+      formatNaira(newOutstanding),
+      invoice.pay_by_date ? new Date(invoice.pay_by_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+      paymentUrl
+    ).catch(e => console.error("Failed to send receipt email:", e));
+  }
+
   return NextResponse.json({
     success: true,
     newAmountPaid,

@@ -71,24 +71,6 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     if (inv?.clients?.email) setEmailTo(inv.clients.email);
     // Fetch history from server action
     let h = await getInvoiceHistory(id);
-    
-    // Synthesize "Created" event
-    if (inv) {
-      h = [
-        ...h,
-        {
-          id: `synth-${inv.id}-created`,
-          event_type: "created",
-          actor_id: null,
-          actor_role: "merchant",
-          target_id: inv.id,
-          target_type: "invoice",
-          metadata: { actor_name: "Adewale (Owner)" },
-          created_at: inv.created_at,
-        }
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }
-    
     setHistory(h);
   };
 

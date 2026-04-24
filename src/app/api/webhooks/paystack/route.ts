@@ -94,5 +94,54 @@ export async function POST(request: Request) {
   });
 
   console.log(`✅ Payment recorded: ${reference} — ₦${paymentAmount} on invoice ${invoiceId}`);
+
+  // 3. Record audit log
+  await supabase.from("audit_logs").insert({
+    event_type: "payment_received",
+    actor_id: null,
+    actor_role: "system",
+    target_id: invoiceId,
+    target_type: "invoice",
+    metadata: {
+      actor_merchant_id: invoice.merchant_id,
+      actor_name: "System (Paystack Webhook)",
+      amount: paymentAmount,
+      reference: reference
+    }
+  });
+
+  // 4. Send email receipt
+  // We need to fetch the client info because we didn't populate it in the invoice query
+  const { data: fullInvoice } = await supabase
+    .from("invoices")
+    .select("*, clients(email, full_name)")
+    .eq("id", invoiceId)
+    .single();
+
+  if (fullInvoice?.clients?.email) {
+    const { sendPaymentReceiptEmail } = await import("@/lib/brevo");
+    const { formatNaira } = await import("@/lib/calculations");
+    
+    const { data: merchantData } = await supabase
+      .from("merchants")
+      .select("business_name")
+      .eq("id", invoice.merchant_id)
+      .single();
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const paymentUrl = `${appUrl}/pay/${invoice.id}`;
+
+    await sendPaymentReceiptEmail(
+      fullInvoice.clients.email,
+      fullInvoice.clients.full_name || "Valued Client",
+      merchantData?.business_name || "PurpLedger Merchant",
+      invoice.invoice_number,
+      formatNaira(paymentAmount),
+      formatNaira(newOutstanding),
+      invoice.pay_by_date ? new Date(invoice.pay_by_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+      paymentUrl
+    ).catch(e => console.error("Failed to send receipt email:", e));
+  }
+
   return NextResponse.json({ received: true });
 }
