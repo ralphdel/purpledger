@@ -179,9 +179,11 @@ export default function AdminMerchantsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {Number(m.monthly_collection_limit) > 0
-                      ? formatNaira(Number(m.monthly_collection_limit))
-                      : "Unlimited"}
+                    {m.merchant_tier === "starter"
+                      ? formatNaira(0)
+                      : Number(m.monthly_collection_limit) > 0
+                        ? formatNaira(Number(m.monthly_collection_limit))
+                        : "Unlimited"}
                   </TableCell>
                   <TableCell className="text-sm text-neutral-500">
                     {new Date(m.created_at).toLocaleDateString("en-NG", {

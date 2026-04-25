@@ -60,7 +60,8 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
   // ── Invoice status logic ──────────────────────────────────────────────────
   // Check if merchant limit is exceeded
-  const limitExceeded = merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false;
+  const isStarter = merchant?.merchant_tier === "starter";
+  const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
 
   // Manually closed or fully closed → no more payments accepted
   const isManuallyClosed = invoice.status === "manually_closed";
@@ -138,11 +139,13 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   const grandTotal = Number(invoice.grand_total);
   const parsedAmount = parseFloat(inputAmount) || 0;
   const minimumPayment = getMinimumPayment(grandTotal, outstandingBalance);
+  const remainingLimit = isStarter ? 0 : (merchant?.monthly_collection_limit ? merchant.monthly_collection_limit - monthlyCollected : Infinity);
 
   // Validation states
+  const exceedsRemainingLimit = parsedAmount > remainingLimit;
   const isBelowMinimum = parsedAmount > 0 && parsedAmount < minimumPayment;
   const isAboveMax = parsedAmount > outstandingBalance;
-  const isValidAmount = parsedAmount >= minimumPayment && parsedAmount <= outstandingBalance;
+  const isValidAmount = parsedAmount >= minimumPayment && parsedAmount <= outstandingBalance && !exceedsRemainingLimit;
   const cappedAmount = Math.min(parsedAmount, outstandingBalance);
 
   const allocation = calculateProportionalPayment(
@@ -421,6 +424,19 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
                     <p className="text-red-600 mt-1">
                       Your payment cannot exceed the outstanding balance of <strong>{formatNaira(outstandingBalance)}</strong>.
                       Use the &quot;Full&quot; button to pay the entire balance.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {exceedsRemainingLimit && !isAboveMax && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-red-700">Merchant Limit Exceeded</p>
+                    <p className="text-red-600 mt-1">
+                      This amount exceeds the merchant's remaining monthly collection limit (<strong>{formatNaira(remainingLimit)}</strong> left). 
+                      Please enter a smaller amount or contact the merchant directly.
                     </p>
                   </div>
                 </div>
