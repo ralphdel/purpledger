@@ -132,7 +132,7 @@ export async function forgotPasswordAction(email: string) {
     type: 'recovery',
     email,
     options: {
-      redirectTo: `${appUrl}/reset-password`,
+      redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
     }
   });
 
