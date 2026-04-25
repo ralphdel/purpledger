@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
-  if (url.pathname.startsWith('/admin')) {
+  if (url.pathname.startsWith('/admin') && url.pathname !== '/admin-login') {
     const adminSession = request.cookies.get('admin_session')?.value;
     if (adminSession !== 'authenticated') {
       url.pathname = '/admin-login';
@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register');
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/invoices') || request.nextUrl.pathname.startsWith('/team') || request.nextUrl.pathname.startsWith('/clients') || request.nextUrl.pathname.startsWith('/settings');
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
+  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin') && request.nextUrl.pathname !== '/admin-login';
   const isSuspendedRoute = request.nextUrl.pathname.startsWith('/suspended');
   const isSetPasswordRoute = request.nextUrl.pathname.startsWith('/set-password');
 
