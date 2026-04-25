@@ -119,7 +119,12 @@ export async function logoutUser() {
 export async function forgotPasswordAction(email: string) {
   if (!email) return { success: false, error: "Email is required" };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+  // Never use localhost in production - fall back to the hardcoded production URL
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const isLocalhost = configuredUrl.includes("localhost") || configuredUrl.includes("127.0.0.1");
+  const appUrl = isLocalhost && process.env.NODE_ENV === "production"
+    ? "https://purpledger.vercel.app"
+    : configuredUrl || "https://purpledger.vercel.app";
   
   // Use service role client to securely generate the reset link without triggering Supabase's rate-limited email
   const { createClient: createSupabaseClient } = await import("@supabase/supabase-js");
@@ -132,7 +137,7 @@ export async function forgotPasswordAction(email: string) {
     type: 'recovery',
     email,
     options: {
-      redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     }
   });
 
