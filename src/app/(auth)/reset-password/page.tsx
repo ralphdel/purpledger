@@ -19,51 +19,61 @@ export default function ResetPasswordPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    // The Supabase generateLink 'recovery' type creates an implicit-flow link.
-    // When the user clicks it, Supabase's server redirects to this page with
-    // #access_token=...&type=recovery in the URL hash.
-    // The Supabase client library automatically picks up the hash and fires
-    // the PASSWORD_RECOVERY event via onAuthStateChange.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "PASSWORD_RECOVERY" && session) {
-          // Session is now active — allow the user to set a new password
-          setSessionReady(true);
-          setChecking(false);
-          setError(null);
-        } else if (event === "SIGNED_IN" && session) {
-          // Handle if a valid session already existed (e.g. user refreshed the page)
-          setSessionReady(true);
-          setChecking(false);
-          setError(null);
-        }
-      }
-    );
+    /**
+     * The @supabase/ssr client does NOT auto-process URL hash tokens.
+     * Supabase's generateLink('recovery') sends an implicit-flow link where
+     * the tokens arrive in the URL hash:
+     *   /reset-password#access_token=...&refresh_token=...&type=recovery
+     *
+     * We must manually parse them and call setSession() ourselves.
+     */
+    const hash = window.location.hash;
 
-    // Fallback: check if there's already an active session (e.g. user refreshed the page)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSessionReady(true);
-        setChecking(false);
-      } else {
-        // Give onAuthStateChange time to fire from the URL hash before showing error
-        // The hash processing is async, so we wait 2.5 seconds
-        setTimeout(() => {
-          setChecking(false);
-          setSessionReady(prev => {
-            if (!prev) {
-              setError("Auth session missing! The link may have expired. Please request a new reset link.");
+    if (hash && hash.includes("access_token")) {
+      const params = new URLSearchParams(hash.substring(1)); // strip leading #
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type = params.get("type");
+
+      if (accessToken && refreshToken && type === "recovery") {
+        supabase.auth
+          .setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ data, error: sessionError }) => {
+            if (sessionError || !data.session) {
+              setError(
+                "This reset link is invalid or has expired. Please request a new one."
+              );
+            } else {
+              setSessionReady(true);
+              // Clean up the hash so tokens aren't visible in the URL bar
+              window.history.replaceState(
+                null,
+                "",
+                window.location.pathname
+              );
             }
-            return prev;
+            setChecking(false);
           });
-        }, 2500);
+      } else {
+        setError(
+          "Invalid reset link. Please request a new password reset."
+        );
+        setChecking(false);
       }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    } else {
+      // No hash — check if user already has an active session (e.g. page refresh)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setSessionReady(true);
+        } else {
+          setError(
+            "Auth session missing! Please click the link in your email again."
+          );
+        }
+        setChecking(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -74,42 +84,44 @@ export default function ResetPasswordPage() {
       setError("Passwords do not match");
       return;
     }
-
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
     }
 
     setLoading(true);
-
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
       if (updateError) throw updateError;
 
-      // After successful reset, log out and send to login
       await supabase.auth.signOut();
       router.push("/login?reset=success");
     } catch (err: any) {
-      setError(err.message || "Failed to update password");
+      setError(err.message || "Failed to update password. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // While we wait for the PASSWORD_RECOVERY event from the URL hash, show a spinner
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (checking) {
     return (
-      <div className="w-full flex flex-col items-center justify-center gap-4 py-12">
+      <div className="w-full flex flex-col items-center justify-center gap-4 py-16">
         <Loader2 className="w-8 h-8 animate-spin text-purp-700" />
         <p className="text-neutral-500 text-sm">Verifying your reset link…</p>
       </div>
     );
   }
 
+  // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div className="w-full">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-purp-900 tracking-tight">Create New Password</h1>
+        <h1 className="text-3xl font-bold text-purp-900 tracking-tight">
+          Create New Password
+        </h1>
         <p className="text-neutral-500 mt-2">
           Your new password must be at least 8 characters.
         </p>
@@ -123,7 +135,6 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {/* Only show the form if we have a valid recovery session */}
         {sessionReady && (
           <>
             <div className="space-y-2">
@@ -169,11 +180,6 @@ export default function ResetPasswordPage() {
               )}
             </Button>
           </>
-        )}
-
-        {/* If no session and no error yet, show a request link button */}
-        {!sessionReady && !error && (
-          <p className="text-center text-sm text-neutral-500">Waiting for session…</p>
         )}
       </form>
     </div>
