@@ -57,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     .toUpperCase();
 
   return (
-    <div className="min-h-screen flex bg-purp-50">
+    <div className="flex-1 w-full flex bg-purp-50">
       {/* Sidebar - Desktop */}
       <aside className="hidden lg:flex lg:w-64 bg-purp-900 flex-col fixed inset-y-0 z-30">
         <div className="p-6">

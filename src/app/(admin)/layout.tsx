@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-neutral-50">
+    <div className="flex-1 w-full flex bg-neutral-50">
       {/* Sidebar - Desktop */}
       <aside className="hidden lg:flex lg:w-64 bg-neutral-900 flex-col fixed inset-y-0 z-30">
         <div className="p-6">

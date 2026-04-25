@@ -34,7 +34,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-purp-50 flex items-center justify-center p-4">
+      <div className="flex-1 w-full bg-purp-50 flex items-center justify-center p-4">
         <div className="w-8 h-8 border-2 border-purp-700 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -42,7 +42,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
   if (!invoice) {
     return (
-      <div className="min-h-screen bg-purp-50 flex items-center justify-center p-4">
+      <div className="flex-1 w-full bg-purp-50 flex items-center justify-center p-4">
         <Card className="max-w-md w-full border-2 border-purp-200">
           <CardContent className="pt-6 text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -82,7 +82,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
     const isClosed = isManuallyClosed || isFullyClosed || isVoid;
 
     return (
-      <div className="min-h-screen bg-purp-50 flex items-center justify-center p-4">
+      <div className="flex-1 w-full bg-purp-50 flex items-center justify-center p-4">
         <Card className="max-w-md w-full border-2 border-purp-200">
           <CardContent className="pt-6 text-center space-y-4">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
@@ -285,7 +285,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F7FF] flex flex-col md:flex-row">
+    <div className="flex-1 w-full bg-[#F8F7FF] flex flex-col md:flex-row">
       {/* Left Panel: Invoice Details */}
       <div className="w-full md:w-5/12 lg:w-1/3 bg-purp-900 text-white p-6 md:p-8 flex flex-col md:h-screen md:sticky md:top-0 md:overflow-y-auto">
         <div className="flex items-center gap-3 mb-10">
