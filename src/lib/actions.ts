@@ -496,13 +496,37 @@ export async function createClientAction(clientData: {
   email?: string;
   phone?: string;
   company_name?: string;
+  address?: string;
+  whatsapp_number?: string;
+  reminder_enabled?: boolean;
+  reminder_channels?: ("email" | "whatsapp")[];
   merchant_id: string;
 }) {
   const adminClient = getServiceClient();
+
+  // Normalise whatsapp_number to international format before storing
+  let normalisedWhatsApp: string | undefined;
+  if (clientData.whatsapp_number) {
+    const digits = clientData.whatsapp_number.replace(/\D/g, "");
+    normalisedWhatsApp = digits.startsWith("0") && digits.length === 11
+      ? "234" + digits.slice(1)
+      : digits;
+  }
+
   const { error } = await adminClient
     .from("clients")
-    .insert([clientData]);
-    
+    .insert([{
+      full_name: clientData.full_name,
+      email: clientData.email || null,
+      phone: clientData.phone || null,
+      company_name: clientData.company_name || null,
+      address: clientData.address || null,
+      whatsapp_number: normalisedWhatsApp || null,
+      reminder_enabled: clientData.reminder_enabled ?? false,
+      reminder_channels: clientData.reminder_channels ?? [],
+      merchant_id: clientData.merchant_id,
+    }]);
+
   if (error) return { success: false, error: error.message };
   revalidatePath("/clients");
   return { success: true };

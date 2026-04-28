@@ -1,0 +1,1696 @@
+﻿PurpLedger  |  Master Build Document v2.1
+
+
+PurpLedger
+The Smart Ledger for Modern Collections
+MASTER BUILD DOCUMENT
+Version 2.1  —  Final Pre-Build Reference
+Consolidates: PRD v1.0  +  Addendum v1.1  +  Delta v1.2  +  UX Feature Build Doc  +  v2.0
+New: Pricing  |  WhatsApp Reminders  |  Admin Directory  |  DB Purge  |  Brevo SMTP
+April 2026  |  Next.js 16.3  +  Supabase  +  Paystack  +  Brevo  +  WATI  +  Gemini AI
+	
+
+CONFIDENTIAL  —  INTERNAL USE ONLY
+________________
+
+
+1. PRODUCT OVERVIEW & CORE PHILOSOPHY
+	
+
+PurpLedger is a dual-mode invoicing and payment collection platform. It is the only invoicing tool in its class that serves two fundamentally different workflows under one roof: structured bookkeeping for merchants who collect offline, and live digital payment collection for merchants who collect via Paystack. Both modes are first-class citizens of the platform.
+
+
+1.1 The Two Invoice Types — The Core Differentiator
+
+
+	Record Invoice   vs   Collection Invoice
+	Purpose
+	Bookkeeping and record-keeping only. For merchants who receive offline cash, bank transfers, or any payment outside Paystack. The invoice documents what was agreed and tracks what has been received.
+	Payment Link
+	None. No Paystack integration. No QR code for payment.
+	Amount Paid
+	Manually entered by the merchant when payment is received. Supports partial entries — merchant updates it progressively as client pays.
+	Reminders
+	Automated reminder emails sent to client using a 'contact merchant to pay' template — no Pay Now button.
+	Status logic
+	Open → Partially Paid → Closed (merchant manually marks as closed or enters full amount). Manual Close protocol (reason required) applies.
+	Available to
+	All paid plans (Individual + Corporate) + Starter (up to 5 records).
+	
+
+
+
+	Collection Invoice
+	Purpose
+	Live digital payment collection. The merchant sends a link; the client pays online via Paystack (card, bank transfer, USSD).
+	Payment Link
+	Auto-generated short link + QR code. Customer opens link, edits amount if partial, pays on Paystack.
+	Amount Paid
+	Auto-updated via Paystack webhook on every successful transaction.
+	Reminders
+	Automated reminder emails with Pay Now button linking to the payment portal.
+	Status logic
+	Full proportional recalculation engine. Open → Partially Paid → Closed (auto on full payment). Manual Close protocol applies.
+	Available to
+	Individual plan (BVN verified) + Corporate plan (all docs verified). Starter cannot use Collection Invoices.
+	
+
+1.2 Stack (Confirmed v1.2)
+Layer
+	Technology
+	Notes
+	Frontend
+	Next.js 16.3 (App Router, Turbopack)
+	Server Components + Client Components
+	Mutations
+	Next.js Server Actions ('use server')
+	Central: src/lib/actions.ts
+	Database
+	Supabase (PostgreSQL + RLS)
+	Row-level security on all tables
+	Auth
+	Supabase Auth
+	Magic links for onboarding; email+password for login
+	Storage
+	Supabase Storage
+	KYC docs, logos, QR codes
+	Payments
+	Paystack (via PaymentService abstraction)
+	Never called directly — see Section 7
+	Email
+	Brevo (Sendinblue) REST API
+	Transactional + automated reports
+	AI
+	Google Gemini API
+	PurpBot — read-only, SELECT queries only
+	Hosting
+	Vercel (Edge Network)
+	Cron jobs via vercel.json
+	________________
+
+
+2. SUBSCRIPTION PLANS & TIER PERMISSIONS
+Starter  |  Individual  |  Corporate
+	
+
+Subscription plan and verification status are stored and evaluated independently. A merchant can hold a Corporate plan but have incomplete verification — their payment links remain locked until docs are approved. This separation prevents edge-case confusion and keeps the data model clean.
+
+
+2.1 The Two-Axis Gate
+Axis
+	Column
+	Subscription Plan
+	merchants.subscription_plan = 'starter' | 'individual' | 'corporate'
+	Verification Status
+	merchants.verification_status = 'unverified' | 'pending' | 'verified' | 'rejected' | 'suspended'
+	Collection Invoice Gate
+	subscription_plan IN ('individual','corporate') AND verification_status = 'verified' AND required docs approved for that tier
+	Record Invoice Gate
+	subscription_plan IN ('individual','corporate') OR (starter AND record_invoice_count < 5)
+	
+
+2.2 Full Feature Permission Matrix
+BVN & Record Invoice — Explicit Rule
+BVN verification is NOT required to create Record Invoices. Record Invoices are bookkeeping tools — they have no Paystack integration and generate no payment link. Any merchant on a paid plan (Individual or Corporate) can create unlimited Record Invoices regardless of their verification status. BVN is only required to activate Collection Invoice payment links.
+	
+
+Feature
+	Starter (Free)
+	Individual
+	Corporate
+	Notes
+	Monthly Price
+	Free
+	₦5,000/month
+	₦20,000/month
+	PurpLedger absorbs Paystack fee on subscription
+	Record Invoices
+	Up to 5
+	Unlimited
+	Unlimited
+	No BVN required — any plan, any verification status
+	Collection Invoices
+	No
+	Yes (BVN verified)
+	Yes (all docs verified)
+	Paystack-powered payment links
+	Monthly Collection Limit
+	None (no payments)
+	₦5,000,000
+	Unlimited
+	Admin-configurable in platform_settings
+	Clients
+	Up to 10
+	Unlimited
+	Unlimited
+	
+
+	Dashboard (KPIs)
+	Yes
+	Yes
+	Yes
+	
+
+	PurpBot AI
+	No
+	Yes
+	Yes
+	Read-only on all plans
+	Team Members
+	No
+	Owner + 1
+	Unlimited
+	
+
+	Payment Links
+	No
+	Yes (BVN verified)
+	Yes (all docs verified)
+	
+
+	QR Codes
+	No
+	Yes (BVN verified)
+	Yes (all docs verified)
+	
+
+	Item Catalog
+	No
+	Yes
+	Yes
+	
+
+	Discount Templates
+	No
+	Yes
+	Yes
+	
+
+	Analytics / Reports
+	No
+	Yes
+	Yes
+	
+
+	Monthly Email Report
+	No
+	Yes
+	Yes
+	Brevo — 1st of each month
+	WhatsApp Reminders
+	No
+	Yes
+	Yes
+	WATI — Sprint E
+	Email Reminders
+	No
+	Both invoice types
+	Both invoice types
+	Record: no Pay Now link
+	Settings (profile)
+	Yes
+	Yes
+	Yes
+	
+
+	Upgrade Prompt
+	Throughout UI
+	Corporate CTA in Settings
+	None
+	
+
+	KYC for payment links
+	None
+	BVN only
+	BVN + CAC + RC + Utility
+	Record Invoices need none
+	
+
+2.3 Starter Tier — Detailed Experience
+Starter is a generous free tier designed to let merchants experience PurpLedger's core value before committing to a subscription. It is not a crippled demo — it is a real, usable product with meaningful limits.
+
+
+Area
+	Starter Experience
+	Dashboard
+	Fully visible. Shows KPIs for their Record Invoices and clients. No payment-related metrics (no collection data exists).
+	Invoices section
+	Invoice list loads both invoice type tabs. 'Record Invoice' tab is active and functional (up to 5). 'Collection Invoice' tab shows a locked card: 'Upgrade to Individual to send payment links. Starting from [price]/month.' — no empty table.
+	Clients
+	Fully functional up to 10 clients. At 10: 'You have reached the free limit. Upgrade to add more clients.'
+	Team
+	Tab is completely hidden from navigation. Not visible, not disabled — just absent.
+	PurpBot
+	Visible in nav but clicking opens a locked state: 'PurpBot is available on Individual and Corporate plans. Upgrade to get AI-powered financial insights.'
+	Settings
+	Full profile settings (name, email, logo, password). At bottom: 'You are on the Starter plan. Upgrade to unlock all features.' + plan comparison card.
+	Analytics
+	Hidden from navigation.
+	5th Record Invoice
+	On creation of the 5th: a gentle banner after save: 'You have 0 Record Invoice slots remaining. Upgrade to Individual for unlimited invoicing.'
+	6th Record Invoice (attempt)
+	Save button triggers modal: 'You have reached the Starter limit of 5 invoices. Upgrade to continue — your existing invoices are safe.'
+	
+
+2.4 Individual Plan — Detailed Experience
+* Full access to all platform features except Corporate-only team management.
+* Team: Owner account + 1 additional member (any role). Adding a 2nd member shows: 'Team is limited to 2 members on Individual. Upgrade to Corporate for unlimited team access.'
+* Collection Invoices: available but payment link is gated behind BVN verification.
+* Collection Invoice with unverified BVN: invoice can be created and saved. Share Link and QR Code buttons are disabled with tooltip: 'Verify your BVN in Settings to activate payment links.'
+* Record Invoices: fully available, unlimited.
+* PurpBot: fully active (read-only as always).
+* Monthly automated report: sent on the 1st of each month via Brevo.
+* Upgrade CTA: persistent but unobtrusive link in Settings footer and team page.
+
+
+2.5 Corporate Plan — Detailed Experience
+* Unlimited access to all platform features.
+* Team: unlimited members, all roles available including custom.
+* Collection Invoices: payment links active only when all required documents are verified (BVN of owner, CAC document, RC number, utility bill).
+* Per-document status visible in Settings > Verification: each document shows Approved / Pending / Rejected independently.
+* If any required document is rejected: merchant is notified via email with the rejection reason and can resubmit.
+* Monthly automated report includes team activity summary.
+________________
+
+
+3. ONBOARDING FLOW
+Landing Page → Payment → Account Activation → Dashboard
+	
+
+The onboarding flow is designed to convert landing page visitors into active merchants with minimal friction. Payment is collected before account creation, ensuring only committed merchants enter the platform. Supabase magic links are used throughout — no passwords are ever transmitted in emails.
+
+
+3.1 Starter Plan Onboarding
+STARTER ONBOARDING — Free, No Payment
+Landing page → 'Start Free' CTA → /register (standard signup form)
+
+
+Step 1: Signup Form
+  Fields: Business Name (required) + Email (required) + Password (required)
+  Supabase createUser() fires on submit
+  merchants row created: subscription_plan='starter', verification_status='unverified'
+
+
+Step 2: Email Verification
+  Supabase sends standard verification email (magic link)
+  Page shown: 'Check your inbox to verify your email address.'
+
+
+Step 3: Verification Click
+  Merchant clicks link in email → Supabase confirms email → redirected to /dashboard
+  Dashboard opens in Starter-gated experience
+
+
+Total steps: 3. No payment, no KYC, immediate access.
+	
+
+3.2 Individual & Corporate Plan Onboarding
+Subscription Fee — PurpLedger Absorbs Paystack Fee
+When a merchant pays their subscription (₦5,000 or ₦20,000), the Paystack processing fee (~₦175 on ₦5,000) is absorbed by PurpLedger. The merchant is charged the clean published price. This is baked into pricing and is industry-standard SaaS practice. The subscription payment goes to PurpLedger's main Paystack account — not to any merchant subaccount.
+	
+
+Brevo SMTP — Already Configured
+Supabase custom SMTP has been configured to route all auth emails (magic links, password resets, email verification) through Brevo's SMTP servers. This removes Supabase's 3 emails/hour free-tier limit. Brevo free tier: 300 emails/day. No code change required — this is a Supabase Dashboard configuration already applied. All onboarding magic links are delivered via Brevo.
+	
+
+PAID PLAN ONBOARDING — Individual or Corporate
+Landing page → Select plan (Individual or Corporate) → /onboarding/[plan]
+
+
+STEP 1 — Intent Capture (/onboarding/[plan])
+  Fields: Business Name + Email
+  No password collected here
+  System checks: does email already exist in auth.users?
+    YES → 'This email already has an account. Log in to upgrade your plan.'
+    NO  → Continue
+  Submit creates a PENDING_PAYMENT record in onboarding_sessions table:
+    { email, business_name, plan, status: 'awaiting_payment', expires_at: now()+24h }
+
+
+STEP 2 — Payment Initialization
+  System calls PaymentService.initializeTransaction() for the subscription fee
+  This charges PurpLedger's OWN Paystack main account (not a subaccount)
+  Merchant is redirected to Paystack checkout for the subscription fee
+
+
+STEP 3 — Payment Webhook (charge.success)
+  Paystack fires charge.success to /api/webhooks/paystack
+  Handler detects this is a subscription payment (metadata.type = 'subscription')
+  Creates Supabase auth user (email only, NO password set yet)
+  Creates merchants row: subscription_plan=[plan], verification_status='unverified'
+  Updates onboarding_sessions: status='payment_confirmed'
+  Triggers Brevo: Welcome + Set Password email
+
+
+STEP 4 — Welcome Email (Brevo Template: onboarding_welcome)
+  Subject: 'Welcome to PurpLedger — activate your account'
+  Body: Business name greeting + plan confirmation
+  CTA: 'Set Your Password' → links to Supabase magic link (secure, time-limited)
+  NO password in the email. The magic link IS the credential.
+
+
+STEP 5 — Set Password Page (/onboarding/set-password)
+  Merchant arrives via magic link (Supabase handles token validation)
+  Single form: New Password + Confirm Password (min 8 chars, strength indicator)
+  On save: Supabase updateUser({ password }) called
+  Merchant is now fully authenticated
+
+
+STEP 6 — Dashboard (Plan-Gated)
+  Redirected to /dashboard
+  Dashboard loads with correct plan permissions
+  Persistent KYC banner if on Individual/Corporate (verification required for payment links)
+  Onboarding checklist shown (collapsible): Complete Profile / Verify Identity / Add Settlement Account
+	
+
+3.3 Payment Failure Handling
+Failure Scenario
+	System Behaviour
+	Customer exits Paystack without paying
+	onboarding_sessions record expires after 24h. No auth user created. Merchant can restart from landing page.
+	Paystack payment fails (card declined)
+	Paystack redirect to callback URL with status=failed. Page shown: 'Payment unsuccessful. Please try again.' Retry button re-initializes a new Paystack transaction.
+	Webhook not received (Paystack delay)
+	onboarding_sessions.status remains 'awaiting_payment'. Paystack retries webhook for up to 72h. A cron job checks pending sessions and reconciles via PaymentService.verifyTransaction() after 30 min.
+	Magic link expires before merchant clicks
+	Merchant can request a new one from the 'Resend activation email' page at /onboarding/resend. Auth user already exists — system sends a new Supabase magic link.
+	Duplicate payment (merchant pays twice)
+	Idempotency key on onboarding_sessions prevents duplicate account creation. Second charge.success is caught and refunded via Paystack refund API.
+	
+
+3.4 Onboarding Sessions Table (New)
+CREATE TABLE IF NOT EXISTS onboarding_sessions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           TEXT NOT NULL,
+  business_name   TEXT NOT NULL,
+  plan            TEXT NOT NULL,   -- 'individual' | 'corporate'
+  status          TEXT NOT NULL DEFAULT 'awaiting_payment',
+  --  'awaiting_payment' | 'payment_confirmed' | 'activated' | 'expired'
+  paystack_ref    TEXT,            -- Paystack transaction reference
+  amount_paid     NUMERIC(10,2),   -- Subscription fee paid
+  merchant_id     UUID REFERENCES merchants(id),  -- Set after account creation
+  expires_at      TIMESTAMPTZ NOT NULL,   -- now() + INTERVAL '24 hours'
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  idempotency_key TEXT UNIQUE,     -- Paystack ref — prevents duplicate processing
+
+
+  CONSTRAINT valid_plan CHECK (plan IN ('individual', 'corporate')),
+  CONSTRAINT valid_status CHECK (status IN (
+    'awaiting_payment','payment_confirmed','activated','expired'
+  ))
+);
+
+
+-- Cron reconciliation index
+CREATE INDEX idx_onboarding_pending
+  ON onboarding_sessions(status, created_at)
+  WHERE status = 'awaiting_payment';
+	________________
+
+
+4. DUAL INVOICE SYSTEM
+Record Invoice  +  Collection Invoice
+	
+
+4.1 Invoice Type Selection UI
+When the merchant opens the invoice creation flow, they first see an invoice type selector — two large cards side by side before any form fields appear.
+
+
+Card
+	Specification
+	Record Invoice card
+	Icon: BookOpen (Lucide). Title: 'Record Invoice'. Subtitle: 'Track payments received offline. No payment link generated.' Chip: 'All plans'. Background: white. Border: 2px solid purp-200.
+	Collection Invoice card
+	Icon: Zap (Lucide). Title: 'Collection Invoice'. Subtitle: 'Send a payment link. Clients pay via card, transfer, or USSD.' Chip: 'Individual & Corporate'. Background: white. Border: 2px solid purp-200.
+	Selected state
+	Border changes to 2px solid amethyst (#7B2FBE). Subtle purp-50 background fill. Checkmark icon in top-right corner of card.
+	Starter user — Collection Invoice card
+	Card is visible but shows a lock icon overlay. On click: upgrade modal appears instead of selecting the type.
+	Default selection
+	Collection Invoice for Individual/Corporate. Record Invoice for Starter.
+	Persistence
+	Selected type is stored in URL param (?type=record or ?type=collection) so browser back navigation works correctly.
+	
+
+4.2 Record Invoice — Field Specification
+The Record Invoice form is a simplified version of the Collection Invoice form. Fields present in both are identical in behaviour. Fields unique to Record Invoice are noted.
+
+
+Field
+	Record Invoice Behaviour
+	Invoice Number
+	Same as Collection Invoice — auto or custom.
+	Client
+	Same — searchable dropdown with Quick-Add Client modal (FB-002).
+	Line Items
+	Same — item catalog combobox (FB-003), quantity, rate, line total.
+	Subtotal / Discount / Tax / Grand Total
+	Same calculations, same display.
+	Fee Absorption Toggle
+	ABSENT — not applicable. No Paystack fee to calculate.
+	Pay-By Date
+	Renamed to 'Due Date' on Record Invoices. Same behaviour: used for overdue detection and reminder scheduling. No link expiry (there is no link).
+	Notes / Terms
+	Same.
+	Amount Paid (Record-Invoice-only field)
+	A manually editable currency field below Grand Total. Default: 0. Merchant updates this when they receive a cash or bank transfer payment. Shows Outstanding Balance = Grand Total - Amount Paid below it.
+	Payment Notes (Record-Invoice-only)
+	Optional freetext: 'How was payment received?' e.g., 'Cash payment received 15 April'. Not on Collection Invoice.
+	Send Reminders Toggle
+	Toggle: 'Send automated reminders to client'. On by default if client has email. Off by default if no client email (with tooltip: 'Add client email to enable reminders').
+	
+
+4.3 Record Invoice — Amount Paid Update Flow
+A verified merchant receives a cash or bank transfer from a client. They update PurpLedger to keep their records accurate.
+1. Merchant opens the Record Invoice from their invoice list.
+2. Invoice detail page shows: Grand Total | Amount Paid (current) | Outstanding Balance.
+3. Merchant clicks 'Record Payment' button.
+4. A drawer/modal opens: 'Record a Payment Received'
+   * Amount Received (required — pre-fills with outstanding balance)
+   * Payment Method: Cash / Bank Transfer / Cheque / Other (dropdown)
+   * Date Received (date picker, defaults to today)
+   * Reference / Note (optional freetext)
+5. Merchant clicks 'Save Payment'.
+6. Server Action creates a manual_payments record and updates invoice.amount_paid.
+7. Invoice status transitions: Open → Partially Paid → Closed (when amount_paid = grand_total).
+8. If partially paid: Outstanding Balance updates. Reminder schedule continues.
+9. If fully paid: Invoice closes. Reminders stop. Merchant sees 'Paid in Full' badge.
+
+
+4.4 Record Invoice Status State Machine
+Status
+	Trigger
+	OPEN
+	Invoice created. amount_paid = 0. Due date has not passed.
+	PARTIALLY PAID
+	Merchant records a payment. amount_paid > 0 but < grand_total.
+	CLOSED
+	Merchant records payment that brings amount_paid = grand_total (system auto-closes).
+	MANUALLY CLOSED
+	Merchant clicks 'Close Manually'. Requires mandatory Reason Code. Balance may be non-zero (e.g., small amount waived).
+	OVERDUE
+	Due date has passed. amount_paid < grand_total. Reminders intensify (frequency increases). Link to 'Mark as Bad Debt' (manual close with reason: Bad Debt Write-Off).
+	VOID
+	Merchant voids invoice pre-payment. Mandatory reason required. amount_paid must be 0.
+	
+
+4.5 Invoice List — Two-Tab Layout
+UI Element
+	Specification
+	Tab 1: Record Invoices
+	Shows all Record Invoices for this merchant. Columns: Invoice No. | Client | Grand Total | Amount Paid | Outstanding | Status | Due Date | Actions.
+	Tab 2: Collection Invoices
+	Shows all Collection Invoices. Columns: Invoice No. | Client | Grand Total | Amount Paid | Outstanding | Status | Pay-By Date | Actions. For Starter: locked state shown instead of table.
+	Default tab
+	Remember last selected tab in localStorage.
+	Status badges
+	OPEN (blue), PARTIALLY PAID (amber), CLOSED (green), OVERDUE (red), MANUALLY CLOSED (purple), VOID (gray).
+	Outstanding column
+	Bold red if invoice is OVERDUE. Normal text otherwise.
+	Actions menu
+	Record Invoice: View, Edit (pre-payment only), Record Payment, Send Reminder, Close Manually, Void. Collection Invoice: View, Copy Link, Download QR, Send Reminder, Close Manually, Void.
+	
+
+4.6 Schema — invoice_type Column & manual_payments Table
+-- Add invoice_type to invoices table
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'collection'
+  CONSTRAINT valid_invoice_type CHECK (invoice_type IN ('record', 'collection'));
+
+
+-- For Record Invoices: amount_paid and outstanding_balance are updated
+-- via manual_payments, not via Paystack webhooks.
+-- The existing amount_paid and outstanding_balance columns are reused.
+-- payment_method on manual_payments is different from transactions table.
+
+
+CREATE TABLE IF NOT EXISTS manual_payments (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id      UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+  merchant_id     UUID NOT NULL REFERENCES merchants(id),
+  amount          NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  payment_method  TEXT NOT NULL DEFAULT 'cash',
+  --  'cash' | 'bank_transfer' | 'cheque' | 'other'
+  date_received   DATE NOT NULL DEFAULT CURRENT_DATE,
+  reference_note  TEXT,          -- Merchant's internal note
+  recorded_by     UUID REFERENCES auth.users(id),  -- Which team member recorded it
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- RLS
+ALTER TABLE manual_payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY manual_payments_merchant ON manual_payments
+  FOR ALL USING (
+    merchant_id IN (
+      SELECT id FROM merchants WHERE user_id = auth.uid()
+      UNION
+      SELECT merchant_id FROM merchant_team
+        WHERE user_id = auth.uid() AND is_active = true
+    )
+  );
+
+
+-- Collection Invoice constraint: Paystack webhooks must not insert
+-- manual_payments rows. Server Action must check invoice_type before inserting.
+	________________
+
+
+5. AUTOMATED COMMUNICATIONS
+Invoice Reminders  +  Monthly Reports  —  via Brevo
+	
+
+5.1 Invoice Reminder System
+Reminders are sent for both Record and Collection Invoices. The template used depends on the invoice type. Reminders are triggered by the Vercel cron job at /api/cron/invoice-reminders (already built — needs vercel.json config).
+
+
+Reminder Schedule
+Trigger
+	Action
+	3 days before due date
+	First reminder sent. Friendly tone.
+	1 day before due date
+	Second reminder. Slightly more direct.
+	On due date
+	Third reminder. 'Payment due today.'
+	3 days after due date
+	Invoice status transitions to OVERDUE. Fourth reminder.
+	7 days after due date
+	Fifth reminder. Tone shifts to formal.
+	14 days after due date
+	Final reminder. Includes merchant's contact info prominently.
+	After final reminder
+	No more automated reminders. Invoice remains OVERDUE. Merchant sees it in Aging Report.
+	
+
+Two Reminder Templates
+Template
+	Content Rules
+	COLLECTION_REMINDER (for Collection Invoices)
+	Merchant name + logo. Invoice number + grand total. Amount paid (if partial). Outstanding balance. Large 'Pay Now' button linking to /pay/[invoiceId]. Due date. Merchant's business contact email. Paystack secure payment note at footer.
+	RECORD_REMINDER (for Record Invoices)
+	Merchant name + logo. Invoice number + grand total. Amount paid (if partial). Outstanding balance. Due date. 'To pay, please contact [Merchant Business Name] at [Merchant Email / Phone].' NO Pay Now button. NO payment link. Clean, professional format.
+	
+
+Critical: RECORD_REMINDER Must Never Contain a Payment Link
+The Record Invoice reminder email must have no Paystack link, no QR code, and no 'Pay Now' CTA. The client is instructed to contact the merchant directly. Sending a payment link for a Record Invoice would bypass the offline payment tracking system and create reconciliation chaos.
+	
+
+5.2 Monthly Automated Report
+On the 1st of every month, every active Individual and Corporate merchant receives an automated monthly summary email. This is a Brevo batch job triggered by the cron endpoint /api/cron/monthly-reports (new).
+
+
+Report Email Content
+Section
+	Content
+	Header
+	'Your [Month] [Year] Summary — PurpLedger'. Merchant business name + logo.
+	Collection Summary
+	Total invoiced (Collection Invoices) | Total collected | Outstanding balance | Number of new clients this month.
+	Record Summary
+	Total recorded (Record Invoices) | Total received offline | Outstanding balance on Record Invoices.
+	Combined Total
+	All invoices (both types): total invoiced, total received, total outstanding.
+	Top 3 Clients Owing
+	Clients with highest outstanding balance (combined Record + Collection). Name + amount.
+	Aging Snapshot
+	Simple text table: 0-30 days overdue | 31-60 days | 60+ days. Value in NGN for each bucket.
+	Invoice Count
+	Record Invoices: [X] open, [Y] closed this month. Collection Invoices: [A] open, [B] closed this month.
+	CTA
+	'View Full Report on PurpLedger' → links to /analytics dashboard.
+	Footer
+	Unsubscribe link (Brevo-managed). 'You receive this because you have an active PurpLedger account.'
+	
+
+Implementation
+// New cron endpoint: src/app/api/cron/monthly-reports/route.ts
+// Triggered by vercel.json cron on 1st of every month at 07:00 WAT (06:00 UTC)
+
+
+// vercel.json addition:
+{
+  "crons": [
+    { "path": "/api/cron/invoice-reminders", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/monthly-reports",   "schedule": "0 6 1 * *" }
+  ]
+}
+
+
+// Report generation flow:
+// 1. Fetch all active Individual + Corporate merchants
+// 2. For each merchant: run report query (see below)
+// 3. Pass report data to Brevo template via API
+// 4. Brevo sends personalised email to merchant
+// 5. Log delivery to audit_logs (event: 'monthly_report_sent')
+
+
+// Report query (single merchant):
+// SELECT
+//   COUNT(*) FILTER (WHERE invoice_type='collection' AND status='open') as open_collection,
+//   SUM(grand_total) FILTER (WHERE invoice_type='collection') as total_invoiced_collection,
+//   SUM(amount_paid) FILTER (WHERE invoice_type='collection') as total_collected,
+//   COUNT(*) FILTER (WHERE invoice_type='record' AND status='open') as open_record,
+//   SUM(grand_total) FILTER (WHERE invoice_type='record') as total_invoiced_record,
+//   SUM(amount_paid) FILTER (WHERE invoice_type='record') as total_received_offline
+// FROM invoices
+// WHERE merchant_id = $1
+//   AND created_at >= date_trunc('month', now() - INTERVAL '1 month')
+//   AND created_at < date_trunc('month', now())
+	________________
+
+
+6. LANDING PAGE — PRICING & VERIFICATION UPDATES
+	
+
+6.1 Pricing Section
+The landing page pricing section must reflect the three-tier model clearly. The plan cards must communicate what you get, not just what you pay.
+
+
+Plan
+	Price
+	Card Content
+	Starter
+	Free forever
+	Up to 5 Record Invoices. Up to 10 clients. Basic dashboard. No payment links. CTA: 'Start Free — No card required'
+	Individual
+	₦5,000/month
+	Unlimited Record + Collection Invoices. BVN verification for payment links. PurpBot AI. Automated reminders + monthly report. Owner + 1 team member. ₦5M monthly collection limit. CTA: 'Get Started — Individual'
+	Corporate
+	₦20,000/month
+	Everything in Individual. Unlimited team members. Unlimited collections. Full business verification (CAC + BVN + Utility). Priority support. CTA: 'Get Started — Corporate'
+	
+
+UI Requirement
+	Specification
+	Most Popular badge
+	Place on Individual plan card. Flat solid amethyst background, white text — no gradient.
+	Verification callout
+	Small text beneath each paid plan CTA: 'Payment links require identity verification (BVN for Individual, CAC + docs for Corporate). Free to verify.'
+	Record Invoice explanation
+	A small tooltip or info icon next to 'Record Invoices' in the feature list: 'Track offline cash and bank transfer payments without a Paystack link.'
+	FAQ entry
+	Add FAQ: 'Can I use PurpLedger without Paystack?' — Answer: 'Yes. Record Invoices let you track any payment type without connecting to Paystack.'
+	Plan CTA routing
+	Starter → /register (standard signup). Individual → /onboarding/individual. Corporate → /onboarding/corporate.
+	
+
+6.2 Verification Section on Landing Page
+Add a short 'How Verification Works' section below pricing — 3 steps, flat icons, no gradients:
+* Step 1 — Sign up and pay for your plan (or start free with Starter).
+* Step 2 — Verify your identity in Settings: BVN for Individual, business documents for Corporate.
+* Step 3 — Payment links and QR codes are activated immediately on approval.
+Include: 'Verification typically takes under 5 minutes for Individual accounts using BVN. Corporate verification takes up to 24 hours.'
+________________
+
+
+7. SETTLEMENT ARCHITECTURE & PAYMENTSERVICE
+Processor-Agnostic Design — Do Not Call Paystack Directly
+	
+
+Full specification carried forward from PRD Delta v1.2. This section is the authoritative settlement reference.
+
+
+7.1 The Abstraction Rule
+Non-Negotiable Architecture Constraint
+src/lib/payment/ is the only place in the entire codebase that knows Paystack exists. No route handler, Server Action, or component imports the Paystack SDK or calls api.paystack.co directly. Switching to Monnify in v1.3 means writing one new adapter file — zero changes to invoice logic, webhook handling, or Server Actions.
+Test: grep the codebase for 'paystack.co' or 'PAYSTACK_SECRET_KEY'. Only PaystackAdapter.ts and .env.local should match. Any other match is a violation.
+	
+
+7.2 PaymentService Directory
+src/lib/payment/
+├── types.ts              ← IPaymentProcessor interface + all shared types
+├── PaymentService.ts     ← Singleton. Reads PAYMENT_PROVIDER env var.
+├── adapters/
+│   ├── PaystackAdapter.ts    ← Current. Only file that calls Paystack.
+│   └── MonnifyAdapter.ts     ← Future. Add without touching anything else.
+└── index.ts              ← export { PaymentService } from './PaymentService'
+	
+
+7.3 IPaymentProcessor Interface (types.ts)
+export interface IPaymentProcessor {
+  initializeTransaction(p: TransactionParams):   Promise<TransactionResult>;
+  verifyTransaction(reference: string):          Promise<Record<string,unknown>>;
+  createSubaccount(p: SubaccountParams):         Promise<SubaccountResult>;
+  updateSubaccount(code:string, p:Partial<SubaccountParams>): Promise<SubaccountResult>;
+  getBankList(country?: string):                 Promise<BankListItem[]>;
+  resolveAccountNumber(bankCode:string, accountNumber:string): Promise<AccountResolutionResult>;
+  verifyWebhook(payload:unknown, sig:string):   WebhookVerificationResult;
+}
+
+
+// Subscription payment uses the same initializeTransaction — differentiated
+// by metadata.type = 'subscription' | 'invoice_payment'
+// Webhook handler branches on this metadata field.
+	
+
+7.4 Settlement Account Onboarding
+Settlement setup is triggered after KYC approval. It is a mandatory prerequisite before Collection Invoice payment links go live.
+Step
+	Specification
+	Trigger
+	KYC approval email includes CTA: 'Add your bank account to activate payment links.' OR merchant clicks Share Invoice (gated modal prompts settlement setup).
+	Page
+	/settings/settlement — Owner only.
+	Bank selector
+	Searchable dropdown from PaymentService.getBankList(). Never free-text.
+	Account number
+	10-digit input. On blur: PaymentService.resolveAccountNumber() called. Resolved name displayed for confirmation.
+	Save
+	Calls PaymentService.createSubaccount({ percentage_charge: 0, settlement_schedule: 'auto' }). Stores ACCT_xxx in merchants.payment_subaccount_code. Sets subaccount_verified = false.
+	First payout
+	Held by Paystack for verification (one-time per subaccount). Admin notified. Subsequent payouts automatic.
+	
+
+7.5 Schema Additions (Merchants Table)
+ALTER TABLE merchants
+  ADD COLUMN IF NOT EXISTS subscription_plan        TEXT NOT NULL DEFAULT 'starter',
+  --  'starter' | 'individual' | 'corporate'
+
+
+  ADD COLUMN IF NOT EXISTS settlement_bank_name     TEXT,
+  ADD COLUMN IF NOT EXISTS settlement_bank_code     TEXT,
+  ADD COLUMN IF NOT EXISTS settlement_account_number TEXT,   -- pgcrypto encrypted
+  ADD COLUMN IF NOT EXISTS settlement_account_name  TEXT,
+  ADD COLUMN IF NOT EXISTS settlement_account_type  TEXT DEFAULT 'personal',
+  ADD COLUMN IF NOT EXISTS payment_subaccount_code  TEXT,    -- ACCT_xxx
+  ADD COLUMN IF NOT EXISTS payment_provider         TEXT DEFAULT 'paystack',
+  ADD COLUMN IF NOT EXISTS subaccount_verified      BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS settlement_activated_at  TIMESTAMPTZ,
+
+
+  ADD COLUMN IF NOT EXISTS monthly_collection_limit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS kyc_submitted_at         TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS kyc_notes                TEXT,
+  ADD COLUMN IF NOT EXISTS holds_pending_review     BOOLEAN NOT NULL DEFAULT false;
+
+
+-- PAYMENT_PROVIDER env var controls which adapter PaymentService uses.
+-- Switching to Monnify: set PAYMENT_PROVIDER=monnify — zero code changes needed.
+	________________
+
+
+8. UX FEATURES — USER FEEDBACK SPRINT
+FB-001: Client Address  |  FB-002: Quick-Add Client  |  FB-003: Item Catalog & Discount Templates
+	
+
+8.1 FB-001 — Client Address Field
+Add a single nullable address field to the client record. Surfaces on the client form, client detail view, and the payment portal Bill To section.
+
+
+Spec Point
+	Detail
+	DB change
+	ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT CONSTRAINT address_max CHECK (char_length(address) <= 300)
+	Form field
+	Textarea, 3 rows, optional, placeholder: 'e.g. 12 Adeola Odeku Street, Victoria Island, Lagos'. Live char counter: '47/300'.
+	Client detail view
+	Address row with MapPin icon (Lucide). Hidden entirely if null.
+	Payment portal — Bill To
+	Name → Company (if set) → Address (if set). Each on own line. No blank lines if fields are null.
+	Record Invoice reminder email
+	Bill To section also shows address if set — helps client identify which invoice is referenced.
+	
+
+8.2 FB-002 — Quick-Add Client Inside Invoice Creation
+Eliminate the need to leave the invoice creation page to add a new client. An inline modal calls the exact same createClient() Server Action — no duplicate logic.
+
+
+Spec Point
+	Detail
+	Entry points
+	(1) '+  New Client' option pinned top of client dropdown, amethyst text, separated by border. (2) '+ Add Client' text button above the client dropdown label.
+	Modal
+	Shadcn Dialog. Title: 'New Client'. Fields: Business Name (required), Email, Phone, Company, Address. Identical to /clients create form.
+	On save
+	createClient() Server Action fires → returns full client object → modal closes → new client auto-selected in dropdown → toast: 'Client saved and selected.' → merchant continues on same page.
+	Auto-select rule
+	Non-negotiable. If modal closes without auto-selecting the new client, the feature has failed.
+	Architecture
+	CreateClientModal is a standalone reusable component. /clients page also uses it. Single source of truth.
+	
+
+8.3 FB-003A — Item Catalog
+A merchant-level catalog of saved line items. Name + default rate. Quantity always entered per invoice. Rate is editable after catalog selection without updating the catalog.
+
+
+Spec Point
+	Detail
+	New table
+	item_catalog: id, merchant_id, item_name (max 200), default_rate, description, is_active, usage_count, created_at, updated_at
+	Invoice combobox
+	Item name field becomes type-ahead combobox. Catalog loaded on page mount (client-side filtering). Matching on substring, case-insensitive.
+	On selection
+	item_name fills. default_rate fills Rate field (highlighted). Quantity field auto-focuses.
+	Rate edit
+	Merchant can edit rate freely. '(rate edited)' note appears. Catalog entry unchanged.
+	Save to catalog chip
+	After typing a custom item not in catalog: 'Save to catalog' chip appears. Optional. Saves name + rate to item_catalog.
+	usage_count
+	Incremented in createInvoice() Server Action when invoice is saved — not on selection. Prevents inflation from abandoned drafts.
+	Management page
+	/settings/catalog — list sorted by usage_count DESC. Add / Edit / Soft-delete (is_active = false).
+	Availability
+	Individual + Corporate plans only. Starter: feature hidden.
+	
+
+8.4 FB-003B — Predefined Discount Templates
+Merchant saves named discount percentages (e.g., 'Loyalty — 10%'). Applied as a shortcut to the discount field. Invoice stores only the final percentage — no FK link to template. Deleting a template never affects past invoices.
+
+
+Spec Point
+	Detail
+	New table
+	discount_templates: id, merchant_id, name (max 100), percentage (0.01–100), is_active, created_at
+	Invoice UI
+	'Use saved discount' text link above discount input. Visible only if merchant has active templates. Opens Shadcn Popover listing templates. Selecting one fills the field.
+	Post-apply chip
+	'Applied: [Template Name]' chip below field. Disappears if merchant edits value manually.
+	Management page
+	/settings/discount-templates (or tab on /settings/catalog)
+	Suggested defaults
+	On empty state: 3 pre-filled examples — 'Early Payment 5%', 'Loyalty 10%', 'Bulk Order 15%'. Each has '+ Add This' button.
+	Max templates
+	20 active templates per merchant. Soft cap with UI message.
+	Availability
+	Individual + Corporate only.
+	________________
+
+
+9. COMPLETE SCHEMA REFERENCE
+All tables — existing + new — as of v2.0
+	
+
+9.1 Core Tables Summary
+Table
+	Status
+	Purpose
+	merchants
+	Existing + extended
+	Merchant accounts, plans, verification, settlement
+	clients
+	Existing + extended
+	Client records (+ address column)
+	invoices
+	Existing + extended
+	Both Record and Collection Invoices (+ invoice_type)
+	invoice_line_items
+	Existing
+	Line items per invoice
+	transactions
+	Existing
+	Paystack payment records (Collection Invoices only)
+	manual_payments
+	NEW
+	Offline payment records (Record Invoices only)
+	audit_logs
+	Existing
+	Immutable event log — all financial actions
+	payment_events
+	NEW
+	Payment processor webhook events (Paystack/Monnify)
+	item_catalog
+	NEW
+	Merchant's saved line items with default rates
+	discount_templates
+	NEW
+	Merchant's named discount percentage templates
+	merchant_team
+	NEW
+	Team members and role assignments
+	roles
+	NEW
+	Role definitions with JSONB permissions
+	pending_invites
+	NEW
+	48-hour invite tokens for team members
+	onboarding_sessions
+	NEW
+	Tracks paid onboarding from landing page to activation
+	platform_settings
+	NEW
+	Admin-configurable key-value pairs (tier limits, etc.)
+	
+
+9.2 New Tables — Full DDL
+-- 1. manual_payments (Record Invoice offline payment tracking)
+CREATE TABLE IF NOT EXISTS manual_payments (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id     UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+  merchant_id    UUID NOT NULL REFERENCES merchants(id),
+  amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  payment_method TEXT NOT NULL DEFAULT 'cash',
+  date_received  DATE NOT NULL DEFAULT CURRENT_DATE,
+  reference_note TEXT,
+  recorded_by    UUID REFERENCES auth.users(id),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- 2. item_catalog
+CREATE TABLE IF NOT EXISTS item_catalog (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id   UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  item_name     TEXT NOT NULL CONSTRAINT item_name_len CHECK (char_length(item_name)<=200),
+  default_rate  NUMERIC(12,2) NOT NULL CHECK (default_rate >= 0),
+  description   TEXT,
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  usage_count   INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- 3. discount_templates
+CREATE TABLE IF NOT EXISTS discount_templates (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id   UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL CONSTRAINT discount_name_len CHECK (char_length(name)<=100),
+  percentage    NUMERIC(5,2) NOT NULL CHECK (percentage > 0 AND percentage <= 100),
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+-- 4. onboarding_sessions
+CREATE TABLE IF NOT EXISTS onboarding_sessions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           TEXT NOT NULL,
+  business_name   TEXT NOT NULL,
+  plan            TEXT NOT NULL CHECK (plan IN ('individual','corporate')),
+  status          TEXT NOT NULL DEFAULT 'awaiting_payment'
+                  CHECK (status IN ('awaiting_payment','payment_confirmed','activated','expired')),
+  paystack_ref    TEXT,
+  amount_paid     NUMERIC(10,2),
+  merchant_id     UUID REFERENCES merchants(id),
+  expires_at      TIMESTAMPTZ NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  idempotency_key TEXT UNIQUE
+);
+
+
+-- 5. platform_settings (seed immediately after creation)
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by UUID REFERENCES auth.users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO platform_settings (key, value) VALUES
+  ('tier1_monthly_limit','5000000'),        -- ₦5,000,000 for Individual
+  ('tier2_monthly_limit','unlimited'),       -- No limit for Corporate
+  ('starter_invoice_limit','5'),
+  ('starter_client_limit','10'),
+  ('individual_team_limit','2'),
+  ('individual_price_ngn','5000'),           -- ₦5,000/month
+  ('corporate_price_ngn','20000'),           -- ₦20,000/month
+  ('auto_tier_up_threshold','1000000'),
+  ('auto_tier_up_min_days','60'),
+  ('auto_tier_up_chargeback_window','90'),
+  ('active_payment_provider','paystack')
+ON CONFLICT (key) DO NOTHING;
+
+
+-- 6. payment_events
+CREATE TABLE IF NOT EXISTS payment_events (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id     UUID NOT NULL REFERENCES merchants(id),
+  invoice_id      UUID REFERENCES invoices(id),
+  transaction_id  UUID REFERENCES transactions(id),
+  event_type      TEXT NOT NULL,
+  processor       TEXT NOT NULL DEFAULT 'paystack',
+  processor_ref   TEXT,
+  amount_kobo     BIGINT,
+  raw_payload     JSONB,
+  processed_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  idempotency_key TEXT UNIQUE
+);
+	________________
+
+
+10. UPDATED MERCHANT JOURNEYS
+All paths — Starter, Individual, Corporate
+	
+
+10.1 Journey: New Starter Merchant
+STARTER JOURNEY
+Landing → 'Start Free' → /register
+  └─ Email + Business Name + Password
+  └─ merchants: subscription_plan='starter', verification_status='unverified'
+
+
+Dashboard (Starter-gated)
+  └─ Record Invoices: up to 5
+  └─ Collection Invoices: locked card with upgrade CTA
+  └─ PurpBot: locked
+  └─ Team: hidden
+  └─ Analytics: hidden
+
+
+Creates first Record Invoice
+  └─ Type selector: Record Invoice pre-selected
+  └─ Adds client (Quick-Add modal works in Starter too)
+  └─ Sets Due Date. Enables reminders if client has email.
+  └─ Invoice saved. Short link: ABSENT. QR: ABSENT.
+
+
+Client pays offline. Merchant records payment.
+  └─ Opens invoice → 'Record Payment' → amount + method + date
+  └─ Invoice status: Partially Paid or Closed
+
+
+Hits 5-invoice limit → upgrade prompt → /onboarding/individual
+	
+
+10.2 Journey: New Individual Merchant (Paid Onboarding)
+INDIVIDUAL JOURNEY
+Landing → 'Get Started — Individual' → /onboarding/individual
+  └─ Email + Business Name (no password yet)
+  └─ onboarding_sessions created: status='awaiting_payment'
+  └─ Redirected to Paystack checkout (subscription fee)
+
+
+Payment made → charge.success webhook
+  └─ Supabase user created (email only, no password)
+  └─ merchants: subscription_plan='individual'
+  └─ Brevo: Welcome email + 'Set Your Password' magic link
+
+
+Merchant clicks magic link → /onboarding/set-password
+  └─ Sets password → authenticated
+  └─ Redirected to /dashboard
+
+
+Dashboard (Individual, unverified)
+  └─ Onboarding checklist: Complete Profile / Verify BVN / Add Settlement Account
+  └─ Both invoice types available
+  └─ Collection Invoice: can create but Share Link is disabled (BVN not verified)
+  └─ Record Invoice: fully functional, unlimited
+
+
+BVN Verification (Settings > Verification)
+  └─ Submits BVN → status='pending'
+  └─ Admin approves (automated or manual) → status='verified'
+  └─ Merchant notified: 'BVN verified. Add your bank account to activate payment links.'
+
+
+Settlement Setup (Settings > Settlement)
+  └─ Selects bank, enters account number
+  └─ Account name auto-resolved and confirmed
+  └─ PaymentService.createSubaccount() → ACCT_xxx stored
+
+
+Collection Invoice fully live
+  └─ Creates Collection Invoice → Share Link active → QR code generated
+  └─ Client opens /pay/[id] → edits amount → Paystack checkout
+  └─ Webhook fires → invoice updated proportionally
+  └─ Merchant's bank receives settlement (T+1, post-subaccount verification)
+
+
+Monthly report received on 1st of next month
+  └─ Summary: Record Invoices + Collection Invoices combined
+	
+
+10.3 Journey: Customer Paying a Collection Invoice
+CUSTOMER PAYMENT JOURNEY
+Customer receives WhatsApp message / email with payment link
+
+
+Opens /pay/[invoiceId]
+  └─ System checks: invoice not expired, merchant verified
+  └─ Shows: Merchant name/logo, Invoice #, Line items
+  └─ Shows: Grand Total | Amount Paid (if partial) | Outstanding Balance
+
+
+Customer enters desired Amount to Pay
+  └─ Proportional recalculation (live, client-side):
+       k = Amount / Outstanding Balance
+       Tax in this payment = k × invoice.tax_value
+       Discount in this payment = k × invoice.discount_value
+  └─ Breakdown shown: Base | Tax | Discount | Total
+
+
+Fee Absorption applied:
+  └─ Customer Absorbs: Paystack fee calculated and added to display total
+  └─ Business Absorbs: Customer sees clean total; merchant receives less
+
+
+Customer clicks 'Pay Now'
+  └─ POST /api/payment/initialize
+  └─ PaymentService.initializeTransaction() → authorization_url returned
+  └─ Redirect to Paystack checkout
+
+
+Payment complete → Paystack fires charge.success
+  └─ PaymentService.verifyWebhook() validates signature
+  └─ Transaction recorded in transactions table
+  └─ invoice.amount_paid updated, outstanding_balance recalculated
+  └─ Status: Partially Paid or Closed (if fully paid)
+  └─ Settlement flows to merchant's bank via Paystack subaccount
+	________________
+
+
+11. RBAC — ROLE-BASED ACCESS CONTROL
+Team permissions across all roles and plans
+	
+
+11.1 Plan-Level Team Limits
+Plan
+	Team Access
+	Starter
+	No team. Team section hidden from navigation entirely.
+	Individual
+	Owner + 1 additional member. All roles available for the 1 slot.
+	Corporate
+	Unlimited members. All roles including Custom.
+	
+
+11.2 Role Permissions Matrix
+Permission
+	Owner
+	Accountant
+	Viewer
+	Create Record Invoice
+	Yes
+	Yes
+	No
+	Create Collection Invoice
+	Yes
+	Yes
+	No
+	Edit Invoice (pre-payment)
+	Yes
+	Yes
+	No
+	Record Manual Payment
+	Yes
+	Yes
+	No
+	Manual Invoice Close
+	Yes
+	No
+	No
+	Void Invoice
+	Yes
+	No
+	No
+	View All Invoices
+	Yes
+	Yes
+	Yes
+	Manage Clients
+	Yes
+	Yes
+	No
+	Use PurpBot AI
+	Yes
+	Yes
+	Yes
+	View Analytics
+	Yes
+	Yes
+	Yes
+	Manage Item Catalog
+	Yes
+	Yes
+	No
+	Manage Discount Templates
+	Yes
+	Yes
+	No
+	Manage Settlement Account
+	Yes
+	No
+	No
+	Manage Verification / KYC
+	Yes
+	No
+	No
+	Manage Team Members
+	Yes
+	No
+	No
+	Change Plan
+	Yes
+	No
+	No
+	
+
+11.3 Invite Flow — Two-Path Resolution
+Path
+	Flow
+	Existing PurpLedger account
+	Invite link → login prompt with 'You have been invited to join [Business] as [Role].' → On login: merchant_team record created → business appears in account switcher.
+	New user
+	Invite link → streamlined signup (email pre-filled) → on account creation: merchant_team record auto-created → redirected to dashboard.
+	Expired invite (48h+)
+	Friendly error page: 'This invite has expired. Ask your team owner to send a new one.' Expired records cleaned after 7 days.
+	________________
+
+
+________________
+
+
+13. ADMIN — MERCHANT DIRECTORY
+Full visibility of all merchant data, plans, and verification
+	
+
+The Super Admin dashboard must expose a comprehensive, searchable, filterable Merchant Directory. This is the operational nerve centre for monitoring platform health, verifying merchants, and supporting users. Every merchant attribute defined in the schema is surfaced here.
+
+
+13.1 Merchant Directory Table
+Route: /admin/merchants — accessible only to is_super_admin = true accounts.
+
+
+Column
+	Specification
+	Business Name
+	Clickable link → merchant detail view. Shows business logo thumbnail if set.
+	Email
+	Primary contact email. Masked in list: ra***@yahoo.com. Full email visible in detail view.
+	Plan
+	Badge: Starter (gray) | Individual (amethyst) | Corporate (deep indigo).
+	Verification Status
+	Badge: Unverified (gray) | Pending (amber) | Verified (green) | Rejected (red) | Suspended (red, bold).
+	KYC Documents
+	Per-document mini-badges inline: BVN | CAC | Utility. Each shows: Approved (green dot) | Pending (amber dot) | Rejected (red dot) | Not Submitted (empty dot).
+	Monthly Collected
+	NGN amount collected this calendar month vs their limit. Format: ₦1,200,000 / ₦5,000,000. Corporate shows: ₦4,500,000 / Unlimited. Progress bar visualisation.
+	Subaccount Status
+	Settlement account badge: Not Set (gray) | Active (green) | Verified (green, bold) | Held (amber).
+	Team Members
+	Count of active team members. e.g., '3 members'.
+	Invoices
+	Total invoices (Record + Collection). Format: 12R / 8C (Record/Collection counts).
+	Joined
+	Account creation date. Format: 14 Jan 2026.
+	Actions
+	Three-dot menu: View Detail | Verify KYC | Suspend | Reactivate | Reset Password | View Audit Log.
+	
+
+13.2 Merchant Directory Filters & Search
+Filter
+	Options
+	Search
+	Full-text search on business_name and email. Min 2 characters to trigger.
+	Plan
+	All | Starter | Individual | Corporate
+	Verification Status
+	All | Unverified | Pending | Verified | Rejected | Suspended
+	KYC Gap
+	Show only merchants with incomplete KYC for their plan (e.g., Individual with no BVN). Useful for follow-up.
+	Settlement Status
+	All | No Account | Active | Verified | Held
+	Date Range
+	Joined between [date] and [date]. Defaults to all time.
+	Sort
+	Joined (newest first default) | Business Name A-Z | Plan | Monthly Collected DESC
+	
+
+13.3 Merchant Detail View (/admin/merchants/[merchantId])
+Clicking a merchant name opens a full detail view. This is a read-heavy page — admin can take actions but primarily reviews data.
+
+
+Section
+	Content
+	Profile Card
+	Business name, logo, email, phone, workspace_code, plan badge, verification badge, joined date, last active.
+	KYC Documents
+	Each document listed with: status badge, submission date, submitted file (secure inline viewer — no download), admin action buttons: Approve / Reject (reason required) / Request More Info.
+	Subscription
+	Current plan, subscription payment history (date, amount, Paystack reference).
+	Settlement Account
+	Bank name, masked account number (****4521), account name, subaccount code, subaccount_verified status, settlement_activated_at. Admin can see full unmasked details via 'Reveal' button (logged to audit_log).
+	Invoice Summary
+	Record Invoices: count, total invoiced, total received. Collection Invoices: count, total invoiced, total collected, outstanding. Combined outstanding balance.
+	Team Members
+	List of all merchant_team members: name, email, role, is_active, last_active_at.
+	Monthly Collection
+	This month vs limit. Last 6 months bar chart.
+	Audit Log (merchant-scoped)
+	Last 50 audit events for this merchant. Filterable by event type. Paginated.
+	Admin Actions
+	Suspend (requires reason) | Reactivate | Change Plan | Reset Password | Flag for Review | View all invoices (read-only).
+	
+
+13.4 Protected Account — ralphdel14@yahoo.com
+CRITICAL — Never Delete This Account
+The Super Admin account ralphdel14@yahoo.com is the platform owner account. It must never be deleted by any migration script, purge operation, admin action, or cron job. All database migration scripts must include an explicit exclusion clause for this email. The account has is_super_admin = true in Supabase Auth metadata and must retain this flag across all migrations.
+DB purge scripts must always include: WHERE email != 'ralphdel14@yahoo.com'
+	
+
+________________
+
+
+14. WHATSAPP REMINDERS
+WATI Integration — Sprint E (Post-Core MVP)
+	
+
+WhatsApp is the dominant communication channel in Nigeria. User feedback strongly indicates that WhatsApp reminders will have significantly higher open and response rates than email reminders. This section specifies the WhatsApp reminder system using WATI (WhatsApp Business API wrapper) as the MVP provider.
+
+
+14.1 Provider Decision — WATI
+Factor
+	Decision
+	Provider
+	WATI (wati.io) — WhatsApp Business API wrapper popular in Nigeria. Supports template messages, contact management, and REST API.
+	Why WATI over direct Meta API
+	Faster setup (days vs weeks), pre-built template management UI, Nigerian market support, reasonable per-message pricing. Direct Meta API is the long-term goal — WATI is the bridge.
+	Message type
+	Template messages only (WhatsApp Business API requirement). All reminder templates must be pre-approved by Meta via WATI's template submission flow. Plan 5–10 business days for approval.
+	Cost
+	WATI subscription + per-conversation fee (~$0.02–0.05 per 24h conversation window). Volume-based.
+	Environment variable
+	WATI_API_URL, WATI_API_TOKEN — added to .env.local and Vercel environment.
+	
+
+14.2 WhatsApp Number on Client Profile
+WhatsApp reminders require the merchant to have the client's WhatsApp number on file. This adds one new optional field to the client record.
+
+
+-- Schema addition: clients table
+ALTER TABLE clients
+  ADD COLUMN IF NOT EXISTS whatsapp_number TEXT,
+  -- Format: international format without '+', e.g., '2348012345678'
+  -- Validation: must start with country code (234 for Nigeria)
+  -- Optional: if null, WhatsApp reminders are skipped; email used instead
+
+
+CONSTRAINT whatsapp_format CHECK (
+  whatsapp_number IS NULL OR
+  whatsapp_number ~ '^[0-9]{10,15}$'  -- digits only, 10-15 chars
+);
+	
+
+UI Spec
+	Detail
+	Form field
+	'WhatsApp Number (optional)' — placed below Phone in client form. Placeholder: e.g., 08012345678 or +2348012345678. System normalises to international format on save.
+	Normalisation
+	If merchant enters 0801..., system prepends 234 and strips leading 0. Stored as 2348012345678. Displayed to merchant as 0801... (human-readable).
+	Copy from Phone
+	Small 'Same as phone' link if phone number is set — copies and normalises in one click.
+	Reminder toggle
+	When a client has a WhatsApp number, the invoice reminder settings show a 'Send WhatsApp reminders' toggle (on by default). Merchant can disable per client.
+	
+
+14.3 WhatsApp Reminder Templates
+Two WATI templates must be created and submitted for Meta approval before Sprint E go-live:
+
+
+Template
+	Content Structure
+	COLLECTION_REMINDER_WA
+	Body: 'Hello [Client Name], you have an outstanding invoice from [Business Name]. Invoice: [Invoice No.] | Amount Due: ₦[Outstanding Balance] | Due: [Due Date]. Tap to pay: [Payment Link]'. CTA button: 'Pay Now' (URL button linking to /pay/[invoiceId]).
+	RECORD_REMINDER_WA
+	Body: 'Hello [Client Name], this is a reminder from [Business Name]. Invoice: [Invoice No.] | Amount Due: ₦[Outstanding Balance] | Due: [Due Date]. Please contact us to arrange payment: [Merchant Phone / Email]'. No CTA button. No payment link.
+	
+
+14.4 Delivery Logic — Email + WhatsApp
+When a reminder is due, the system checks what channels are available for each client and fires accordingly:
+// Reminder delivery logic (pseudocode)
+// Called by /api/cron/invoice-reminders
+
+
+for each invoice due for reminder:
+  client = invoice.client
+
+
+  // Email channel
+  if client.email is set:
+    send Brevo template (COLLECTION_REMINDER or RECORD_REMINDER)
+
+
+  // WhatsApp channel
+  if client.whatsapp_number is set AND merchant.subscription_plan != 'starter':
+    if invoice.invoice_type == 'collection':
+      send WATI template COLLECTION_REMINDER_WA
+    else:
+      send WATI template RECORD_REMINDER_WA
+
+
+  // If neither channel available:
+  log warning: 'No contact channel for client [id] on invoice [id]'
+  // Surface this in merchant dashboard: 'Add email or WhatsApp to send reminders'
+
+
+  // Both channels can fire simultaneously — not either/or
+	
+
+14.5 WATI Integration Files
+File
+	Purpose
+	src/lib/wati.ts
+	WATI API wrapper. Functions: sendWhatsAppTemplate(phone, templateName, params). Handles auth, error logging, retry on 429.
+	src/app/api/cron/invoice-reminders/route.ts
+	Updated to call wati.sendWhatsAppTemplate() after email dispatch for eligible clients.
+	.env.local
+	Add: WATI_API_URL=https://live-mt-server.wati.io/[account-id] and WATI_API_TOKEN=[your-token]
+	src/lib/types.ts
+	Add whatsapp_number?: string to Client type.
+	src/lib/actions.ts
+	Update createClient() and updateClient() to include whatsapp_number. Add normalisation helper: normaliseWhatsApp(input: string): string.
+	
+
+Sprint E Dependency — Meta Template Approval
+WhatsApp Business API template messages must be submitted to Meta for approval before they can be sent. Submit both templates (COLLECTION_REMINDER_WA and RECORD_REMINDER_WA) via the WATI dashboard as soon as the WATI account is activated. Approval typically takes 1–10 business days. Do not block Sprint E go-live on template approval — deploy the code with a feature flag (ENABLE_WHATSAPP_REMINDERS=false) and flip it to true once templates are approved.
+	________________
+
+
+15. DATABASE MIGRATION & PURGE
+Test data cleanup + schema upgrade to v2.1
+	
+
+All existing merchants in the database are test accounts. A full purge is required before the v2.1 build goes live. The Super Admin account (ralphdel14@yahoo.com) must be explicitly preserved in every purge operation. The migration also applies all v2.1 schema changes.
+
+
+15.1 Pre-Migration Checklist
+Check
+	Action
+	Backup
+	Take a full Supabase database backup before running any purge. Even for test data — belt and braces.
+	Confirm test accounts
+	Verify with product owner that no real paying merchant exists except ralphdel14@yahoo.com.
+	Environment
+	Run purge on production Supabase project (not a clone). Confirm SUPABASE_URL points to the right project before executing.
+	Admin account integrity
+	Confirm ralphdel14@yahoo.com exists in auth.users with is_super_admin = true in raw_user_meta_data before purge.
+	Run order
+	Step 1: Purge → Step 2: Schema migration → Step 3: Seed platform_settings → Step 4: Verify admin account intact.
+	
+
+15.2 Purge Script
+WARNING — Destructive and Irreversible
+The following SQL deletes all merchant records except the protected Super Admin account. It cannot be undone without a database restore. Take a Supabase backup BEFORE running this script. Run in Supabase SQL Editor, not programmatically.
+	
+
+-- ============================================================
+-- PurpLedger v2.1 — Full Test Data Purge
+-- PROTECTED: ralphdel14@yahoo.com (Super Admin — NEVER delete)
+-- Run AFTER taking a full database backup
+-- ============================================================
+
+
+BEGIN;
+
+
+-- Step 1: Capture the protected admin's auth user ID
+-- (used to exclude from auth.users deletion below)
+DO $$ DECLARE
+  protected_email TEXT := 'ralphdel14@yahoo.com';
+  protected_user_id UUID;
+  protected_merchant_id UUID;
+BEGIN
+  SELECT id INTO protected_user_id FROM auth.users WHERE email = protected_email;
+  IF protected_user_id IS NULL THEN
+    RAISE EXCEPTION 'ABORT: Protected admin account not found. Do not proceed.';
+  END IF;
+  RAISE NOTICE 'Protected admin ID confirmed: %', protected_user_id;
+END $$;
+
+
+-- Step 2: Delete all transactional data (FK order — children first)
+DELETE FROM payment_events
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM manual_payments
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM transactions
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM invoice_line_items
+  WHERE invoice_id IN (
+    SELECT id FROM invoices WHERE merchant_id NOT IN (
+      SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+    )
+  );
+
+
+DELETE FROM invoices
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM clients
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM item_catalog
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM discount_templates
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM pending_invites
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM merchant_team
+  WHERE merchant_id NOT IN (
+    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM audit_logs
+  WHERE actor_id NOT IN (
+    SELECT user_id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
+  );
+
+
+DELETE FROM onboarding_sessions
+  WHERE email != 'ralphdel14@yahoo.com';
+
+
+-- Step 3: Delete merchant records (except protected)
+DELETE FROM merchants
+  WHERE email != 'ralphdel14@yahoo.com';
+
+
+-- Step 4: Delete Supabase auth users (except protected)
+-- NOTE: Run this via Supabase Auth Admin API or Dashboard
+-- Cannot run DELETE on auth.users in SQL Editor directly.
+-- Use: supabase.auth.admin.deleteUser(userId) for each test user
+-- OR: Supabase Dashboard → Authentication → Users → select all → delete
+-- Leave: ralphdel14@yahoo.com auth user intact
+
+
+-- Step 5: Verify protection
+DO $$ BEGIN
+  IF (SELECT COUNT(*) FROM merchants WHERE email = 'ralphdel14@yahoo.com') = 0 THEN
+    RAISE EXCEPTION 'ABORT: Protected admin merchant record was deleted. ROLLBACK immediately.';
+  END IF;
+  RAISE NOTICE 'Purge complete. Protected admin merchant record intact.';
+  RAISE NOTICE 'Remaining merchants: %', (SELECT COUNT(*) FROM merchants);
+END $$;
+
+
+COMMIT;
+
+
+-- ============================================================
+-- AFTER PURGE: Run v2.1 schema migration (Section 9 DDL)
+-- THEN: Seed platform_settings (Section 9.2)
+-- THEN: Confirm /admin loads and shows 0 merchants (+ admin)
+-- ============================================================
+	
+
+15.3 Post-Purge Schema Migration
+After the purge, run the full v2.1 schema migration in this exact order:
+10. ALTER TABLE merchants — add all new columns (Section 7.5 + subscription_plan)
+11. ALTER TABLE clients — add address + whatsapp_number columns
+12. ALTER TABLE invoices — add invoice_type column
+13. CREATE TABLE manual_payments
+14. CREATE TABLE item_catalog + discount_templates
+15. CREATE TABLE onboarding_sessions
+16. CREATE TABLE platform_settings — seed immediately after creation
+17. CREATE TABLE payment_events
+18. CREATE TABLE merchant_team + roles + pending_invites
+19. Apply all RLS policies
+20. Verify: SELECT * FROM platform_settings — confirm all 11 keys present
+21. Verify: SELECT email, is_super_admin FROM auth.users JOIN merchants — confirm ralphdel14 intact
+
+
+15.4 Post-Migration Admin Account Verification
+-- Run after migration to confirm admin account integrity
+SELECT
+  m.email,
+  m.subscription_plan,
+  m.verification_status,
+  m.merchant_tier,
+  au.raw_user_meta_data->>'is_super_admin' as is_super_admin
+FROM merchants m
+JOIN auth.users au ON au.email = m.email
+WHERE m.email = 'ralphdel14@yahoo.com';
+
+
+-- Expected result:
+-- email: ralphdel14@yahoo.com
+-- subscription_plan: (whatever was set — update to 'corporate' manually if needed)
+-- verification_status: 'verified'
+-- is_super_admin: 'true'
+
+
+-- If is_super_admin is missing, run:
+-- (via Supabase Auth Admin API)
+-- supabase.auth.admin.updateUserById(userId, {
+--   user_metadata: { is_super_admin: true }
+-- })
+	________________
+
+
+12. UPDATED SPRINT PLAN v2.1
+All phases including WhatsApp and DB migration
+	
+
+Sprint
+	Deliverables
+	PRE-SPRINTDB Migration
+	(1) Take Supabase backup. (2) Run purge script (Section 15.2) — protect ralphdel14@yahoo.com. (3) Run v2.1 schema migration in order (Section 15.3). (4) Seed platform_settings. (5) Verify admin account intact. (6) Confirm Brevo SMTP working (already configured). This is a half-day ops task before code work begins.
+	Sprint A — Week 1Foundation
+	Create src/lib/payment/ with types.ts + PaymentService.ts + PaystackAdapter.ts. Add PAYMENT_PROVIDER=paystack to .env. Update /api/webhooks/paystack to use PaymentService.verifyWebhook(). Create src/lib/wati.ts stub (no-op until Sprint E). Add vercel.json with both cron schedules.
+	Sprint A — Week 2Onboarding
+	Build /onboarding/[plan] intent capture. Build subscription Paystack payment init. Update webhook handler for metadata.type='subscription'. Build /onboarding/set-password magic link page. Build /register for Starter. Update landing page: ₦5,000/₦20,000 pricing, 3-plan cards, verification explainer.
+	Sprint B — Week 1Dual Invoice
+	Add invoice_type. Build invoice type selector UI (two cards). Build Record Invoice form (Amount Paid, Payment Notes, reminders toggle, Due Date). Build 'Record Payment' drawer + manual_payments Server Action. Build two-tab invoice list.
+	Sprint B — Week 2Communications
+	Build two Brevo email templates (COLLECTION_REMINDER, RECORD_REMINDER). Update /api/cron/invoice-reminders for template routing per invoice_type. Build /api/cron/monthly-reports. Build monthly report Brevo template. Test: Record reminder has no payment link.
+	Sprint C — Week 1Settlement + Live Payments
+	Build GET /api/payment/banks + GET /api/payment/resolve-account. Build /settings/settlement page. Wire PaymentService.createSubaccount(). Build POST /api/payment/initialize (replaces demo). Update payment portal. Test full Collection Invoice flow in Paystack test mode.
+	Sprint C — Week 2UX Features
+	FB-001: address on client form + detail view + payment portal. FB-002: CreateClientModal + Quick-Add in invoice with auto-select. FB-003A: item_catalog + /settings/catalog + combobox in invoice. FB-003B: discount_templates + 'Use saved discount' popover.
+	Sprint D — Admin Directory
+	Build /admin/merchants — Merchant Directory table with all columns (Section 13.1). Build filters + search (Section 13.2). Build /admin/merchants/[id] detail view (Section 13.3). Wire all admin actions: Approve KYC, Reject, Suspend, Reactivate, Reset Password. Add audit log viewer per merchant.
+	Sprint D — QA & Go-Live
+	End-to-end all three onboarding paths. Plan-gating verification. BVN gate on Collection Invoice. Record Invoice reminders have no payment link. Full Paystack test mode payment flow. Switch to live Paystack keys. Delete /api/demo-payment. Deploy.
+	Sprint E — WhatsApp
+	Activate WATI account. Add whatsapp_number to client forms. Build src/lib/wati.ts full implementation. Submit COLLECTION_REMINDER_WA and RECORD_REMINDER_WA templates to Meta for approval. Update /api/cron/invoice-reminders to call WATI for clients with whatsapp_number. Add ENABLE_WHATSAPP_REMINDERS feature flag. Flip flag to true once Meta templates approved.
+	
+
+
+
+— END OF MASTER BUILD DOCUMENT v2.1 —
+This document supersedes all prior PurpLedger specification documents.
+PROTECTED ACCOUNT: ralphdel14@yahoo.com — Never delete. Never modify without explicit sign-off.
+PurpLedger Master Build Document v2.1  ·  Confidential  ·  © 2026 PurpLedger
+PurpLedger Master Build Doc v2.1  |  Page  of

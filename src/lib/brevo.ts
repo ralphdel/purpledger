@@ -289,3 +289,123 @@ export async function sendPaymentReceiptEmail(
     htmlContent,
   });
 }
+
+// ── v2.1 New Email Functions ──────────────────────────────────────────────────
+
+/**
+ * Welcome email sent after subscription payment is confirmed.
+ * Contains a magic link to /onboarding/set-password.
+ */
+export async function sendOnboardingWelcomeEmail(
+  toEmail: string,
+  businessName: string,
+  plan: "individual" | "corporate",
+  setPasswordLink: string
+) {
+  const planLabel = plan === "individual" ? "Individual" : "Corporate";
+  const planPrice = plan === "individual" ? "₦5,000/month" : "₦20,000/month";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #4C1D95; padding: 28px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to PurpLedger!</h1>
+        <p style="color: #C4B5FD; margin: 8px 0 0 0; font-size: 14px;">Your ${planLabel} plan (${planPrice}) is now active</p>
+      </div>
+      <div style="padding: 32px;">
+        <p>Hello ${businessName},</p>
+        <p>Your payment for the <strong>PurpLedger ${planLabel} Plan</strong> has been confirmed. Your account is ready.</p>
+        <p>Click the button below to set your password and access your dashboard.</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${setPasswordLink}" style="background-color: #4C1D95; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">
+            Set My Password &rarr;
+          </a>
+        </div>
+        <div style="background-color: #FFF7ED; border: 1px solid #FED7AA; padding: 14px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 13px; color: #9A3412;">
+            <strong>Note:</strong> This link expires in 1 hour. If it expires, <a href="${appUrl}/onboarding/resend" style="color: #9A3412;">click here to request a new one</a>.
+          </p>
+        </div>
+      </div>
+      <div style="background-color: #F9FAFB; padding: 16px; text-align: center; border-top: 1px solid #E5E7EB;">
+        <p style="margin: 0; font-size: 12px; color: #9CA3AF;">PurpLedger &mdash; Smart Invoicing &amp; Payment Tracking</p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    sender: { name: "PurpLedger", email: ADMIN_EMAIL },
+    to: [{ email: toEmail }],
+    subject: `Welcome to PurpLedger — set your password to get started`,
+    htmlContent,
+  });
+}
+
+/**
+ * Reminder email for Record Invoices.
+ * CRITICAL: Must NEVER contain a Pay Now button, payment link, or QR code.
+ * The client is directed to contact the merchant directly.
+ */
+export async function sendRecordReminderEmail(
+  toEmail: string,
+  clientName: string,
+  invoiceNumber: string,
+  businessName: string,
+  merchantEmail: string,
+  merchantPhone: string | null,
+  amountDue: string,
+  dueDate: string,
+  type: "standard" | "urgent" | "overdue"
+) {
+  const color =
+    type === "overdue" ? "#DC2626" : type === "urgent" ? "#D97706" : "#4C1D95";
+  const subject =
+    type === "overdue"
+      ? `OVERDUE: Invoice ${invoiceNumber} from ${businessName}`
+      : type === "urgent"
+      ? `Reminder: Invoice ${invoiceNumber} is due very soon`
+      : `Reminder: Invoice ${invoiceNumber} from ${businessName}`;
+
+  const urgencyText =
+    type === "overdue"
+      ? `<strong style="color: ${color};">This invoice is now overdue.</strong> `
+      : type === "urgent"
+      ? `<strong style="color: ${color};">This invoice is due very soon.</strong> `
+      : "";
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: ${color}; padding: 20px; text-align: center;">
+        <h2 style="color: white; margin: 0;">${businessName}</h2>
+        <p style="color: rgba(255,255,255,0.85); margin: 4px 0 0 0; font-size: 14px;">Invoice Reminder</p>
+      </div>
+      <div style="padding: 30px;">
+        <p>Hello ${clientName},</p>
+        <p style="font-size: 15px; line-height: 1.6;">
+          ${urgencyText}You have an outstanding invoice from <strong>${businessName}</strong>.
+        </p>
+        <div style="background-color: #F9FAFB; border: 1px solid #E5E7EB; padding: 16px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 4px 0;"><strong>Invoice:</strong> ${invoiceNumber}</p>
+          <p style="margin: 4px 0;"><strong>Amount Due:</strong> <span style="color: ${color}; font-weight: bold;">${amountDue}</span></p>
+          <p style="margin: 4px 0;"><strong>Due Date:</strong> ${dueDate}</p>
+        </div>
+        <div style="background-color: #F3F4F6; padding: 16px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0; font-weight: bold;">To arrange payment, contact ${businessName}:</p>
+          <p style="margin: 4px 0;">📧 <a href="mailto:${merchantEmail}" style="color: #4C1D95;">${merchantEmail}</a></p>
+          ${merchantPhone ? `<p style="margin: 4px 0;">📞 ${merchantPhone}</p>` : ""}
+        </div>
+        <p style="font-size: 14px; color: #4B5563;">Thank you for your prompt attention.</p>
+      </div>
+      <div style="background-color: #F9FAFB; padding: 16px; text-align: center; border-top: 1px solid #E5E7EB;">
+        <p style="margin: 0; font-size: 12px; color: #9CA3AF;">PurpLedger &mdash; Smart Invoicing &amp; Payment Tracking</p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    sender: { name: businessName, email: ADMIN_EMAIL },
+    to: [{ email: toEmail }],
+    subject,
+    htmlContent,
+  });
+}

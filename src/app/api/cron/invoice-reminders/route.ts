@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendInvoiceReminderEmail } from "@/lib/brevo";
+import {
+  sendInvoiceReminderEmail,
+  sendRecordReminderEmail,
+} from "@/lib/brevo";
+import { sendWhatsAppTemplate } from "@/lib/wati";
 
-// Create a service role client to bypass RLS for cron jobs
+// Service role client — bypasses RLS for cron jobs
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -10,86 +14,192 @@ const supabase = createClient(
 
 export async function GET(request: Request) {
   // Validate Vercel Cron Secret
-  // Only enforce auth if CRON_SECRET is actually configured.
-  // This allows browser-based testing in dev (no secret set = open access).
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${cronSecret}`) {
-      return new NextResponse("Unauthorized — set Authorization: Bearer <CRON_SECRET>", { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
   }
 
   try {
-    // 1. Fetch all open/partially_paid or expired invoices with client and merchant details
+    // Fetch all open/partially_paid/expired invoices with full client + merchant context.
+    // We select reminder_enabled, reminder_channels, whatsapp_number from clients.
+    // Only process invoices where the client has reminder_enabled = true.
     const { data: invoices, error } = await supabase
       .from("invoices")
       .select(`
         *,
-        clients!inner(full_name, email),
-        merchants!inner(business_name)
+        clients!inner(
+          id,
+          full_name,
+          email,
+          phone,
+          whatsapp_number,
+          reminder_enabled,
+          reminder_channels
+        ),
+        merchants!inner(
+          id,
+          business_name,
+          email,
+          phone
+        )
       `)
       .in("status", ["open", "partially_paid", "expired"]);
 
     if (error) throw error;
 
     let emailsSent = 0;
+    let whatsappSent = 0;
+    let skipped = 0;
+
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    today.setHours(0, 0, 0, 0);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
 
     for (const invoice of invoices) {
-      if (!invoice.clients?.email || !invoice.pay_by_date) continue;
+      const client = invoice.clients;
+      const merchant = invoice.merchants;
+
+      // ── Skip if merchant has disabled reminders for this client ──────────
+      if (!client?.reminder_enabled) {
+        skipped++;
+        continue;
+      }
+
+      // ── Determine the due date field based on invoice type ────────────────
+      // Collection invoices use pay_by_date; Record invoices use the same column
+      const dueDateStr = invoice.pay_by_date;
+      if (!dueDateStr) {
+        skipped++;
+        continue;
+      }
 
       const createdDate = new Date(invoice.created_at);
       createdDate.setHours(0, 0, 0, 0);
-
-      const dueDate = new Date(invoice.pay_by_date);
+      const dueDate = new Date(dueDateStr);
       dueDate.setHours(0, 0, 0, 0);
 
-      const daysSinceCreated = Math.floor((today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
-      const daysUntilDue = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      
+      const daysSinceCreated = Math.floor(
+        (today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const daysUntilDue = Math.floor(
+        (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      // ── Determine reminder type for this invoice ──────────────────────────
       let reminderType: "standard" | "urgent" | "overdue" | null = null;
 
       if (daysUntilDue < 0) {
-        // RULE 3: After deadline, email every 5 days
+        // Overdue: fire every 5 days
         const daysOverdue = Math.abs(daysUntilDue);
-        if (daysOverdue % 5 === 0) {
-          reminderType = "overdue";
-        }
-      } else if (daysUntilDue <= 3 && daysUntilDue >= 0) {
-        // RULE 2: 3 days to deadline, email everyday
+        if (daysOverdue % 5 === 0) reminderType = "overdue";
+      } else if (daysUntilDue <= 3) {
+        // Due within 3 days: fire daily
         reminderType = "urgent";
-      } else {
-        // RULE 1: Standard open invoice, email every 4 days
-        if (daysSinceCreated > 0 && daysSinceCreated % 4 === 0) {
-          reminderType = "standard";
-        }
+      } else if (daysSinceCreated > 0 && daysSinceCreated % 4 === 0) {
+        // Standard open: fire every 4 days
+        reminderType = "standard";
       }
 
-      if (reminderType) {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
-        const payLink = `${appUrl}/pay/${invoice.id}`;
-        const amountDue = `₦${Number(invoice.outstanding_balance).toLocaleString()}`;
-        const formattedDueDate = dueDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+      if (!reminderType) {
+        skipped++;
+        continue;
+      }
 
-        await sendInvoiceReminderEmail(
-          invoice.clients.email,
-          invoice.clients.full_name,
-          invoice.invoice_number,
-          invoice.merchants.business_name,
-          amountDue,
-          formattedDueDate,
-          reminderType,
-          payLink
-        );
+      const amountDue = `₦${Number(invoice.outstanding_balance).toLocaleString("en-NG")}`;
+      const formattedDueDate = dueDate.toLocaleDateString("en-NG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      const channels: string[] = client.reminder_channels ?? [];
+
+      // ── EMAIL channel ─────────────────────────────────────────────────────
+      if (channels.includes("email") && client.email) {
+        if (invoice.invoice_type === "record") {
+          // Record Invoice: NO payment link — use the record reminder template
+          await sendRecordReminderEmail(
+            client.email,
+            client.full_name,
+            invoice.invoice_number,
+            merchant.business_name,
+            merchant.email,
+            merchant.phone || null,
+            amountDue,
+            formattedDueDate,
+            reminderType
+          ).catch((e: unknown) => console.error(`Record email failed ${invoice.id}:`, e));
+        } else {
+          // Collection Invoice: include Pay Now link
+          const payLink = `${appUrl}/pay/${invoice.id}`;
+          await sendInvoiceReminderEmail(
+            client.email,
+            client.full_name,
+            invoice.invoice_number,
+            merchant.business_name,
+            amountDue,
+            formattedDueDate,
+            reminderType,
+            payLink
+          ).catch((e: unknown) => console.error(`Collection email failed ${invoice.id}:`, e));
+        }
         emailsSent++;
+      } else if (channels.includes("email") && !client.email) {
+        console.warn(
+          `[Reminders] Invoice ${invoice.id}: email channel enabled but client has no email — skipping email.`
+        );
+      }
+
+      // ── WHATSAPP channel ──────────────────────────────────────────────────
+      if (channels.includes("whatsapp") && client.whatsapp_number) {
+        const templateName =
+          invoice.invoice_type === "record"
+            ? "RECORD_REMINDER_WA"
+            : "COLLECTION_REMINDER_WA";
+
+        const params = [
+          { name: "client_name", value: client.full_name },
+          { name: "business_name", value: merchant.business_name },
+          { name: "invoice_number", value: invoice.invoice_number },
+          { name: "amount_due", value: amountDue },
+          { name: "due_date", value: formattedDueDate },
+        ];
+
+        // For Collection invoices add payment link param
+        if (invoice.invoice_type === "collection") {
+          params.push({ name: "payment_link", value: `${appUrl}/pay/${invoice.id}` });
+        } else {
+          // Record Invoice: merchant contact instead of payment link
+          params.push({
+            name: "merchant_contact",
+            value: merchant.email + (merchant.phone ? ` / ${merchant.phone}` : ""),
+          });
+        }
+
+        await sendWhatsAppTemplate(client.whatsapp_number, templateName, params).catch(
+          (e: unknown) => console.error(`WhatsApp failed ${invoice.id}:`, e)
+        );
+        whatsappSent++;
+      } else if (channels.includes("whatsapp") && !client.whatsapp_number) {
+        console.warn(
+          `[Reminders] Invoice ${invoice.id}: whatsapp channel enabled but client has no whatsapp_number — skipping WhatsApp.`
+        );
       }
     }
 
-    return NextResponse.json({ success: true, emailsSent });
-  } catch (err: any) {
-    console.error("Cron Error:", err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      processed: invoices.length,
+      emailsSent,
+      whatsappSent,
+      skipped,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown cron error";
+    console.error("Cron invoice-reminders error:", message);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
