@@ -203,7 +203,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   // Whether the payment link is active
   const isStarter = (merchant?.subscription_plan || merchant?.merchant_tier || "starter") === "starter";
   const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
-  const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") && !limitExceeded && invoice.invoice_type !== "record";
+  const isUnverified = merchant?.verification_status !== "verified";
+  const missingSettlement = !merchant?.settlement_account_number;
+  
+  const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") 
+    && !limitExceeded 
+    && !isUnverified
+    && !missingSettlement
+    && invoice.invoice_type !== "record";
 
   const statusIcons: Record<string, React.ElementType> = {
     open: Clock, partially_paid: AlertTriangle, closed: CheckCircle,
@@ -641,16 +648,23 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   </div>
 
                   {!isLinkActive && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
-                      <p className="font-medium">Payment link is inactive</p>
-                      <p className="mt-0.5">
-                        {limitExceeded
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4" />
+                        Payment Link is Inactive
+                      </p>
+                      <p className="mt-1">
+                        {isUnverified
+                          ? "Your business profile is unverified. Please upload the required documents in Settings to enable payment links."
+                          : missingSettlement
+                          ? "You have not linked a settlement bank account. Please set up your banking details in Settings to enable payment links."
+                          : limitExceeded
                           ? isStarter 
                             ? "Starter Tier — Payment links are disabled. Upgrade your tier to accept live payments."
                             : "Monthly collection limit reached. Upgrade your tier to accept more payments."
                           : invoice.status === "expired" || invoice.status === "manually_closed"
                             ? "Reopen this invoice to reactivate the payment link."
-                            : "This invoice is closed."}
+                            : "This invoice is closed and can no longer accept payments."}
                       </p>
                     </div>
                   )}
