@@ -222,6 +222,7 @@ export async function mockKYCVerification(merchantId: string, documentType: "cac
     .update({
       verification_status: "verified",
       merchant_tier: newTier,
+      subscription_plan: newTier,
       kyc_submitted_at: new Date().toISOString(),
       kyc_notes: "Auto-verified via PurpBot / Vendor Mock",
       monthly_collection_limit: newTier === "corporate" ? 50000000 : 5000000,
@@ -410,10 +411,14 @@ export async function adminDeleteMerchantAction(merchantId: string) {
   }
 
   // Delete in order to respect FK constraints
+  await adminClient.from("audit_logs").delete().eq("merchant_id", merchantId);
+  await adminClient.from("onboarding_sessions").delete().eq("merchant_id", merchantId);
+  await adminClient.from("roles").delete().eq("merchant_id", merchantId);
   await adminClient.from("merchant_team").delete().eq("merchant_id", merchantId);
   await adminClient.from("transactions").delete().eq("merchant_id", merchantId);
   await adminClient.from("invoices").delete().eq("merchant_id", merchantId);
   await adminClient.from("clients").delete().eq("merchant_id", merchantId);
+  
   const { error } = await adminClient.from("merchants").delete().eq("id", merchantId);
   if (error) return { success: false, error: error.message };
 

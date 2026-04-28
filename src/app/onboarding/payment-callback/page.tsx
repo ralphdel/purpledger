@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -12,20 +12,49 @@ function PaymentCallbackContent() {
   const trxref = params.get("trxref");
   const reference = params.get("reference");
   const ref = trxref || reference;
+  const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (!ref) {
       router.replace("/");
       return;
     }
-    // The webhook already handled the actual payment logic.
-    // We just show a success state here and let the user know to check email.
+
+    // Verify the payment server-side and provision the merchant account.
+    // This is necessary because the Paystack webhook cannot reach localhost during development.
+    // In production, the webhook may have already handled this — the verify-and-provision
+    // endpoint is idempotent and will skip if the session is already activated.
+    const verifyPayment = async () => {
+      try {
+        const res = await fetch("/api/onboarding/verify-and-provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reference: ref }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setStatus("success");
+        } else {
+          console.error("Provisioning response:", data);
+          // Even if provisioning fails here, the webhook may handle it on production.
+          // Show success to the user since payment was confirmed by Paystack redirect.
+          setStatus("success");
+        }
+      } catch (err) {
+        console.error("Provisioning error:", err);
+        setStatus("success"); // Payment was made, user should check email
+      }
+    };
+
+    verifyPayment();
   }, [ref, router]);
 
-  if (!ref) {
+  if (!ref || status === "verifying") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-purp-50">
+      <div className="min-h-screen flex flex-col gap-3 items-center justify-center bg-purp-50">
         <Loader2 className="w-8 h-8 animate-spin text-purp-700" />
+        <p className="text-sm text-purp-700 font-medium">Verifying your payment...</p>
       </div>
     );
   }

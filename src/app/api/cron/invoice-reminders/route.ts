@@ -56,7 +56,8 @@ export async function GET(request: Request) {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
 
     for (const invoice of invoices) {
       const client = invoice.clients;

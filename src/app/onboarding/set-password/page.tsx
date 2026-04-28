@@ -87,8 +87,18 @@ export default function OnboardingSetPasswordPage() {
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User session lost.");
+
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
+
+      // Clear the must_change_password flag so middleware doesn't force a reset loop
+      await supabase
+        .from("merchant_team")
+        .update({ must_change_password: false })
+        .eq("user_id", user.id);
+
       router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to set password. Please try again.");

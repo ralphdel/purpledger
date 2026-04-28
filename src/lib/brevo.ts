@@ -40,7 +40,8 @@ export async function sendTeamInviteEmail(
   businessName: string,
   tempPassword: string
 ) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
   const loginLink = `${appUrl}/login`;
 
   const htmlContent = `
@@ -304,7 +305,8 @@ export async function sendOnboardingWelcomeEmail(
 ) {
   const planLabel = plan === "individual" ? "Individual" : "Corporate";
   const planPrice = plan === "individual" ? "₦5,000/month" : "₦20,000/month";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden;">

@@ -124,7 +124,8 @@ export default function DashboardPage() {
     clock: Clock,
   };
 
-  const isStarter = merchant?.merchant_tier === "starter";
+  const effectiveTier = merchant?.subscription_plan || merchant?.merchant_tier || "starter";
+  const isStarter = effectiveTier === "starter";
   const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
 
   return (

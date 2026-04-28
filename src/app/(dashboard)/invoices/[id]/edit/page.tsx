@@ -74,8 +74,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   }, [id]);
 
   const addLineItem = (prefill?: { name: string; rate: string }) => {
-    setLineItems([
-      ...lineItems,
+    setLineItems((prev) => [
+      ...prev,
       {
         id: `new_${Date.now()}`,
         itemName: prefill?.name || "",
@@ -93,8 +93,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   };
 
   const updateLineItem = (itemId: string, field: keyof FormLineItem, value: string) => {
-    setLineItems(
-      lineItems.map((li) => (li.id === itemId ? { ...li, [field]: value } : li))
+    setLineItems((prev) =>
+      prev.map((li) => (li.id === itemId ? { ...li, [field]: value } : li))
     );
   };
 
@@ -276,33 +276,37 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
                         : "bg-purp-50 border-purp-200"
                     }`}
                   >
-                    <div className="sm:col-span-5">
+                    <div className="sm:col-span-5 relative flex items-center">
                       <Input
-                        list={`catalog-list-${item.id}`}
                         placeholder="e.g. Late Fee, Additional Service"
                         value={item.itemName}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateLineItem(item.id, "itemName", val);
-                          const matched = catalog.find((c) => c.item_name === val);
-                          if (matched) {
-                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
-                          }
-                        }}
-                        onInput={(e) => {
-                          const val = e.currentTarget.value;
-                          const matched = catalog.find((c) => c.item_name === val);
-                          if (matched) {
-                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
-                          }
-                        }}
-                        className="border-2 border-purp-200 bg-white h-10"
+                        onChange={(e) => updateLineItem(item.id, "itemName", e.target.value)}
+                        className="border-2 border-purp-200 bg-white h-10 pr-[88px]"
                       />
-                      <datalist id={`catalog-list-${item.id}`}>
-                        {catalog.filter((c) => c.is_active).map((c) => (
-                          <option key={c.id} value={c.item_name} />
-                        ))}
-                      </datalist>
+                      {catalog.filter((c) => c.is_active).length > 0 && (
+                        <div className="absolute right-1.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="text-[10px] uppercase tracking-wider font-bold text-purp-600 bg-purp-50 hover:bg-purp-100 px-2 py-1 rounded transition-colors">
+                              Use Saved
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 border-2 border-purp-200 max-h-60 overflow-y-auto">
+                              {catalog.filter((c) => c.is_active).map((c) => (
+                                <DropdownMenuItem
+                                  key={c.id}
+                                  onClick={() => {
+                                    updateLineItem(item.id, "itemName", c.item_name);
+                                    updateLineItem(item.id, "unitRate", c.default_rate.toString());
+                                  }}
+                                  className="font-medium cursor-pointer flex justify-between"
+                                >
+                                  <span className="truncate pr-2">{c.item_name}</span>
+                                  <span className="text-purp-600 font-mono text-xs">{formatNaira(c.default_rate)}</span>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <Input

@@ -140,7 +140,7 @@ export default function AdminOverviewPage() {
                   <div key={m.id} className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
                     <div>
                       <p className="font-medium text-sm text-neutral-900">{m.business_name}</p>
-                      <p className="text-xs text-neutral-500">{m.merchant_tier} tier · {m.email}</p>
+                      <p className="text-xs text-neutral-500">{m.subscription_plan || m.merchant_tier || "starter"} tier · {m.email}</p>
                     </div>
                     <Badge variant="outline" className={`text-xs capitalize ${statusColors[m.verification_status] || ""}`}>
                       {m.verification_status}

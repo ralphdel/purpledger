@@ -107,6 +107,9 @@ export default function AdminMerchantsPage() {
     }
   };
 
+  // Use subscription_plan as the source of truth, fall back to merchant_tier for legacy data
+  const effectiveTier = (m: Merchant) => m.subscription_plan || m.merchant_tier || "starter";
+
   const tierColor = (tier: string) => {
     switch (tier) {
       case "corporate": return "bg-purple-50 text-purple-700 border-purple-200";
@@ -169,8 +172,8 @@ export default function AdminMerchantsPage() {
                     <p className="text-xs text-neutral-500">{m.phone || "—"}</p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-xs capitalize border-2 ${tierColor(m.merchant_tier)}`}>
-                      {m.merchant_tier}
+                    <Badge variant="outline" className={`text-xs capitalize border-2 ${tierColor(effectiveTier(m))}`}>
+                      {effectiveTier(m)}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -179,7 +182,7 @@ export default function AdminMerchantsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {m.merchant_tier === "starter"
+                    {effectiveTier(m) === "starter"
                       ? formatNaira(0)
                       : Number(m.monthly_collection_limit) > 0
                         ? formatNaira(Number(m.monthly_collection_limit))

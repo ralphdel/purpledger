@@ -132,9 +132,9 @@ export default function SettingsPage() {
 
       {/* ── KYC Verification Section ── */}
       <Card className={`border-2 shadow-none ${
-        merchant?.merchant_tier === "corporate"
+        (merchant?.subscription_plan || merchant?.merchant_tier) === "corporate"
           ? "border-emerald-300 bg-emerald-50/30"
-          : merchant?.merchant_tier === "individual"
+          : (merchant?.subscription_plan || merchant?.merchant_tier) === "individual"
           ? "border-blue-300 bg-blue-50/30"
           : "border-purp-300 bg-purp-50/30"
       }`}>
@@ -145,20 +145,20 @@ export default function SettingsPage() {
               Account Verification & Limits
             </CardTitle>
             <Badge variant="outline" className={`border-2 text-xs font-semibold ${
-              merchant?.merchant_tier === "corporate"
+              (merchant?.subscription_plan || merchant?.merchant_tier) === "corporate"
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : merchant?.merchant_tier === "individual"
+                : (merchant?.subscription_plan || merchant?.merchant_tier) === "individual"
                 ? "bg-blue-50 text-blue-700 border-blue-200"
                 : "bg-neutral-50 text-neutral-600 border-neutral-200"
             }`}>
               <Shield className="mr-1 h-3 w-3" />
-              Tier: <span className="capitalize ml-1">{merchant?.merchant_tier || "Starter"}</span>
+              Tier: <span className="capitalize ml-1">{merchant?.subscription_plan || merchant?.merchant_tier || "Starter"}</span>
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* Tier Informational Banner */}
-          {merchant?.merchant_tier === "corporate" ? (
+          {(merchant?.subscription_plan || merchant?.merchant_tier) === "corporate" ? (
             <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
               <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
               <div>
@@ -168,7 +168,7 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-          ) : merchant?.merchant_tier === "individual" ? (
+          ) : (merchant?.subscription_plan || merchant?.merchant_tier) === "individual" ? (
             <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
               <Shield className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div>

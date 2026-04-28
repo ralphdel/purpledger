@@ -9,7 +9,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
   // Unique reference per transaction
   const reference = `SUB-${plan.toUpperCase()}-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
 

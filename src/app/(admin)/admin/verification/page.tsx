@@ -132,6 +132,7 @@ export default function VerificationQueuePage() {
     const updates: any = { 
       [field]: status,
       merchant_tier: newTier,
+      subscription_plan: newTier,
       verification_status: newOverallStatus,
       monthly_collection_limit: limit,
       kyc_notes: reviewNotes || `Admin marked ${field.replace('_', ' ')} as ${status}`
@@ -183,7 +184,7 @@ export default function VerificationQueuePage() {
             <TableCell className="text-sm text-neutral-500">{m.email}</TableCell>
             <TableCell>
               <Badge variant="outline" className="text-xs capitalize border-2 bg-purple-50 text-purple-700 border-purple-200">
-                {m.merchant_tier}
+                {m.subscription_plan || m.merchant_tier}
               </Badge>
             </TableCell>
             <TableCell>
@@ -223,7 +224,7 @@ export default function VerificationQueuePage() {
                       </div>
                       <div>
                         <p className="text-neutral-500">Tier</p>
-                        <p className="font-medium capitalize">{selectedMerchant?.merchant_tier || m.merchant_tier}</p>
+                        <p className="font-medium capitalize">{selectedMerchant?.subscription_plan || selectedMerchant?.merchant_tier || m.subscription_plan || m.merchant_tier}</p>
                       </div>
                       <div>
                         <p className="text-neutral-500">Current Status</p>

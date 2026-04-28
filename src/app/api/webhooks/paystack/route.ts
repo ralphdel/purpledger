@@ -54,52 +54,163 @@ async function handleSubscriptionPayment(
     return NextResponse.json({ received: true });
   }
 
-  // Idempotency: check if this reference was already processed
-  const { data: existingSession } = await supabase
+  // Idempotency & Concurrency Lock
+  // Both the Paystack webhook and the browser callback can fire at the exact same time.
+  // We use an atomic update to claim this session. Only one will succeed in changing
+  // the status from "awaiting_payment" to "processing". The loser will return early,
+  // preventing duplicate accounts and duplicate welcome emails.
+  const { data: session } = await supabase
     .from("onboarding_sessions")
-    .select("id, status, merchant_id")
-    .eq("idempotency_key", reference)
+    .update({ status: "processing" })
+    .eq("id", sessionId)
+    .eq("status", "awaiting_payment")
+    .select("id")
     .single();
 
-  if (existingSession?.status === "payment_confirmed" || existingSession?.status === "activated") {
-    console.log("Duplicate subscription webhook, skipping:", reference);
+  if (!session) {
+    console.log("Duplicate or concurrent subscription webhook, skipping:", reference);
     return NextResponse.json({ received: true });
   }
 
   // 1. Create Supabase auth user (email only, no password — they'll set it via magic link)
+  // IMPORTANT: We pass BOTH business_name AND plan in user_metadata so the database trigger
+  // (handle_new_user) can read them and create the merchant with the correct tier.
+  const activePlan = plan || "corporate";
+
   const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
     email,
     email_confirm: true,
+    user_metadata: {
+      business_name: businessName,
+      plan: activePlan,
+    }
   });
 
-  if (authError || !authUser.user) {
-    // If user already exists (e.g. existing Starter upgrading), don't fail
-    if (!authError?.message?.includes("already")) {
+  let userId = authUser?.user?.id;
+
+  if (authError || !userId) {
+    // If user already exists (e.g. upgrading), look up their ID
+    if (authError?.message?.includes("already") || authError?.status === 422) {
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      const existingUser = existingUsers?.users.find((u) => u.email === email);
+      if (existingUser) {
+        userId = existingUser.id;
+      } else {
+        console.error("User exists but could not be retrieved from listUsers");
+        return NextResponse.json({ error: "User resolution failed" }, { status: 500 });
+      }
+    } else {
       console.error("Failed to create auth user:", authError?.message);
       return NextResponse.json({ error: "User creation failed" }, { status: 500 });
     }
   }
 
-  const userId = authUser?.user?.id;
+  // 2. The database trigger (handle_new_user) fires SYNCHRONOUSLY inside createUser.
+  //    By the time we reach this line, a merchants row already exists.
+  //    We search by BOTH user_id AND email to catch ALL orphaned or duplicate rows,
+  //    including ones left behind from old tests with a different user_id.
 
-  // 2. Create merchants row
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .insert({
-      user_id: userId ?? null,
-      email,
-      business_name: businessName,
-      subscription_plan: plan,
-      verification_status: "unverified",
-      fee_absorption_default: "business",
-      monthly_collection_limit: plan === "individual" ? 5000000 : 0,
-    })
-    .select("id")
-    .single();
+  const [byUserId, byEmail] = await Promise.all([
+    supabase.from("merchants").select("id, business_name, user_id").eq("user_id", userId),
+    supabase.from("merchants").select("id, business_name, user_id").eq("email", email),
+  ]);
 
-  if (merchantError || !merchant) {
-    console.error("Failed to create merchant:", merchantError?.message);
-    return NextResponse.json({ error: "Merchant creation failed" }, { status: 500 });
+  // Merge and deduplicate by id
+  const allMerchants = [...(byUserId.data || []), ...(byEmail.data || [])];
+  const seen = new Set<string>();
+  const uniqueMerchants = allMerchants.filter(m => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+
+  let merchantId: string;
+
+  if (uniqueMerchants.length > 0) {
+    // Sort: prefer rows with real business names over "Default Business"
+    const sorted = [...uniqueMerchants].sort((a, b) => {
+      if (a.business_name === "Default Business" && b.business_name !== "Default Business") return 1;
+      if (b.business_name === "Default Business" && a.business_name !== "Default Business") return -1;
+      return 0;
+    });
+    const keep = sorted[0];
+    const toDelete = sorted.slice(1);
+
+    // Delete ALL duplicates (regardless of user_id)
+    for (const dup of toDelete) {
+      await supabase.from("audit_logs").delete().eq("merchant_id", dup.id);
+      await supabase.from("onboarding_sessions").delete().eq("merchant_id", dup.id);
+      await supabase.from("merchant_team").delete().eq("merchant_id", dup.id);
+      await supabase.from("merchants").delete().eq("id", dup.id);
+    }
+    merchantId = keep.id;
+
+    // Force-update the surviving merchant to the correct plan AND correct user_id
+    const { error: updateError } = await supabase
+      .from("merchants")
+      .update({
+        user_id: userId, // Claim this merchant for the current auth user
+        business_name: businessName,
+        email: email,
+        subscription_plan: activePlan,
+        merchant_tier: activePlan,
+        monthly_collection_limit: activePlan === "individual" ? 5000000 : 0,
+      })
+      .eq("id", merchantId);
+
+    if (updateError) {
+      console.error("Failed to upgrade merchant:", updateError.message);
+      return NextResponse.json({ error: "Merchant upgrade failed" }, { status: 500 });
+    }
+
+    // Ensure merchant_team row exists for RLS
+    // First delete any stale team entries for old user_ids
+    await supabase.from("merchant_team").delete().eq("merchant_id", merchantId).neq("user_id", userId);
+
+    const { data: existingTeam } = await supabase
+      .from("merchant_team")
+      .select("id")
+      .eq("merchant_id", merchantId)
+      .eq("user_id", userId)
+      .single();
+
+    if (!existingTeam) {
+      await supabase.from("merchant_team").insert({
+        merchant_id: merchantId,
+        user_id: userId,
+        role: "owner",
+        must_change_password: true,
+      });
+    }
+  } else {
+    // Fallback: no merchant exists (trigger was disabled or failed)
+    const { data: newMerchant, error: merchantError } = await supabase
+      .from("merchants")
+      .insert({
+        user_id: userId,
+        email,
+        business_name: businessName,
+        subscription_plan: activePlan,
+        merchant_tier: activePlan,
+        verification_status: "unverified",
+        fee_absorption_default: "business",
+        monthly_collection_limit: activePlan === "individual" ? 5000000 : 0,
+      })
+      .select("id")
+      .single();
+
+    if (merchantError || !newMerchant) {
+      console.error("Failed to create merchant:", merchantError?.message);
+      return NextResponse.json({ error: "Merchant creation failed" }, { status: 500 });
+    }
+    merchantId = newMerchant.id;
+
+    await supabase.from("merchant_team").insert({
+      merchant_id: merchantId,
+      user_id: userId,
+      role: "owner",
+      must_change_password: true,
+    });
   }
 
   // 3. Update onboarding_sessions record
@@ -109,24 +220,40 @@ async function handleSubscriptionPayment(
       status: "payment_confirmed",
       paystack_ref: reference,
       amount_paid: amount / 100, // kobo → NGN
-      merchant_id: merchant.id,
+      merchant_id: merchantId,
       idempotency_key: reference,
     })
     .eq("id", sessionId);
 
-  // 4. Generate a Supabase magic link for the set-password page
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://purpledger.vercel.app";
+  // 4. Generate a direct set-password link.
+  // We use generateLink to get tokens, then construct a URL that sends the user
+  // directly to /onboarding/set-password with tokens in the hash fragment.
+  // This bypasses the /auth/callback PKCE flow which causes "Invalid or expired link" errors.
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
+
+  let setPasswordLink = `${appUrl}/onboarding/resend`; // fallback
+
   const { data: magicLinkData, error: magicError } = await supabase.auth.admin.generateLink({
     type: "magiclink",
     email,
-    options: {
-      redirectTo: `${appUrl}/onboarding/set-password`,
-    },
   });
 
-  if (magicError || !magicLinkData?.properties?.action_link) {
-    console.error("Failed to generate magic link:", magicError?.message);
-    // Don't fail — user can use 'Resend activation email' page
+  if (magicError) {
+    console.error("Failed to generate magic link:", magicError.message);
+  } else if (magicLinkData?.properties) {
+    // Rewrite the redirect_to parameter in the action_link to point directly
+    // to the set-password page (not through /auth/callback)
+    const actionLink = magicLinkData.properties.action_link;
+    if (actionLink) {
+      try {
+        const url = new URL(actionLink);
+        url.searchParams.set("redirect_to", `${appUrl}/onboarding/set-password`);
+        setPasswordLink = url.toString();
+      } catch {
+        setPasswordLink = actionLink;
+      }
+    }
   }
 
   // 5. Send welcome + set-password email via Brevo
@@ -135,8 +262,8 @@ async function handleSubscriptionPayment(
     await sendOnboardingWelcomeEmail(
       email,
       businessName,
-      plan,
-      magicLinkData?.properties?.action_link ?? `${appUrl}/onboarding/resend`
+      activePlan as "individual" | "corporate",
+      setPasswordLink
     );
   } catch (e) {
     console.error("Failed to send welcome email:", e);
@@ -147,17 +274,17 @@ async function handleSubscriptionPayment(
     event_type: "subscription_payment_confirmed",
     actor_id: null,
     actor_role: "system",
-    target_id: merchant.id,
+    target_id: merchantId,
     target_type: "merchant",
     metadata: {
       actor_name: "System (Paystack Webhook)",
-      plan,
+      plan: activePlan,
       reference,
       amount_ngn: amount / 100,
     },
   });
 
-  console.log(`✅ Subscription confirmed: ${email} → ${plan} plan — ${reference}`);
+  console.log(`✅ Subscription confirmed: ${email} → ${activePlan} plan — ${reference}`);
   return NextResponse.json({ received: true });
 }
 

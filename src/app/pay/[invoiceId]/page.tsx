@@ -60,7 +60,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
   // ── Invoice status logic ──────────────────────────────────────────────────
   // Check if merchant limit is exceeded
-  const isStarter = merchant?.merchant_tier === "starter";
+  const isStarter = (merchant?.subscription_plan || merchant?.merchant_tier || "starter") === "starter";
   const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
 
   // Manually closed or fully closed → no more payments accepted

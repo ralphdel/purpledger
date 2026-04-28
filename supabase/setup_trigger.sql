@@ -2,6 +2,9 @@
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS is_test_mode BOOLEAN DEFAULT false;
 
 -- 2. Build the Trigger Function
+-- This trigger fires SYNCHRONOUSLY when a new auth.users row is created.
+-- It reads business_name and plan from raw_user_meta_data (set by the webhook's createUser call).
+-- If no plan is provided (e.g. free registration), it defaults to 'starter'.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -10,13 +13,19 @@ AS $$
 DECLARE
   v_merchant_id UUID;
   v_role_id UUID;
+  v_plan TEXT;
 BEGIN
+  -- Read the plan from user metadata (set by the Paystack webhook).
+  -- If not set (e.g. free Starter registration), default to 'starter'.
+  v_plan := COALESCE(NEW.raw_user_meta_data->>'plan', 'starter');
+
   -- Insert the new Merchant record natively syncing with Supabase Auth
   INSERT INTO public.merchants (
     user_id,
     business_name,
     email,
     phone,
+    subscription_plan,
     merchant_tier,
     verification_status,
     is_test_mode
@@ -26,9 +35,10 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'business_name', 'Default Business'),
     NEW.email,
     NEW.raw_user_meta_data->>'phone',
-    'starter',
+    v_plan,
+    v_plan,
     'unverified',
-    false -- Will be manually flipped to true for the ralphdel14 account
+    false
   )
   RETURNING id INTO v_merchant_id;
 

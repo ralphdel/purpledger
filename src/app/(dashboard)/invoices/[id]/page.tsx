@@ -201,7 +201,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   // Whether the invoice can be edited (open, partially_paid, or expired/manually_closed to allow changes before reopening)
   const canEdit = ["open", "partially_paid", "expired", "manually_closed"].includes(invoice.status);
   // Whether the payment link is active
-  const isStarter = merchant?.merchant_tier === "starter";
+  const isStarter = (merchant?.subscription_plan || merchant?.merchant_tier || "starter") === "starter";
   const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
   const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") && !limitExceeded && invoice.invoice_type !== "record";
 
