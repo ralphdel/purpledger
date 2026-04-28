@@ -103,9 +103,9 @@ export default function LandingPage() {
                   Log In
                 </Button>
               </Link>
-              <Link href="/register">
+              <Link href="/onboarding">
                 <Button className="bg-purp-900 hover:bg-purp-700 text-white font-medium px-3 sm:px-4">
-                  <span className="hidden sm:inline">Get Started Free</span>
+                  <span className="hidden sm:inline">Get Started</span>
                   <span className="sm:hidden">Start</span>
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
@@ -132,7 +132,7 @@ export default function LandingPage() {
               proportional tax allocation, and dynamic ledger tracking — so every naira is traceable.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register">
+              <Link href="/onboarding">
                 <Button size="lg" className="bg-purp-900 hover:bg-purp-700 text-white font-semibold px-8 h-12 text-base">
                   Start Invoicing Free
                   <ArrowRight className="ml-2 h-5 w-5" />
@@ -242,7 +242,9 @@ export default function LandingPage() {
                 <li className="flex items-start gap-2"><XCircle className="h-5 w-5 text-red-500 shrink-0" /><span className="text-neutral-600">₦0 Monthly Collection Limit</span></li>
                 <li className="flex items-start gap-2"><XCircle className="h-5 w-5 text-red-500 shrink-0" /><span className="text-neutral-600">Payment Links Locked</span></li>
               </ul>
-              <Badge variant="outline" className="border-purp-200 bg-purp-50 text-purp-900 w-full justify-center py-2 text-sm">Instant Approval</Badge>
+              <Link href="/register">
+                <Button variant="outline" className="w-full border-2 border-purp-200 text-purp-900 hover:bg-purp-50 font-semibold h-11">Start Free</Button>
+              </Link>
             </div>
 
             <div className="bg-purp-900 border-2 border-purp-900 rounded-lg p-8 relative shadow-lg transform md:-translate-y-4 flex flex-col">
@@ -251,27 +253,33 @@ export default function LandingPage() {
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Individual (Tier 1)</h3>
               <p className="text-purp-200 mb-6">For freelancers and sole traders.</p>
-              <div className="text-3xl font-bold text-white mb-6">1.5% <span className="text-sm font-normal text-purp-200">per txn</span></div>
+              <div className="text-3xl font-bold text-white mb-1">₦5,000<span className="text-sm font-normal text-purp-200">/month</span></div>
+              <p className="text-purp-300 text-xs mb-6">+ 1.5% per transaction</p>
               <ul className="space-y-3 mb-8 flex-1">
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">Draft Invoicing Enabled</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">Payment Links Enabled</span></li>
-                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">₦5,000,000 / mo Limit</span></li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">₦500,000 / mo Limit</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">PurpBot AI Enabled</span></li>
               </ul>
-              <Badge variant="outline" className="border-purp-700 bg-purp-800 text-white w-full justify-center py-2 text-sm border-2">Auto-validation (BVN/NIN)</Badge>
+              <Link href="/onboarding/individual">
+                <Button className="w-full bg-white text-purp-900 hover:bg-purp-100 font-semibold h-11">Get Individual</Button>
+              </Link>
             </div>
 
             <div className="bg-white border-2 border-purp-200 rounded-lg p-8 relative flex flex-col">
               <h3 className="text-2xl font-bold text-purp-900 mb-2">Corporate (Tier 2)</h3>
               <p className="text-neutral-500 mb-6">For registered businesses.</p>
-              <div className="text-3xl font-bold text-purp-900 mb-6">1.5% <span className="text-sm font-normal text-neutral-500">per txn</span></div>
+              <div className="text-3xl font-bold text-purp-900 mb-1">₦20,000<span className="text-sm font-normal text-neutral-500">/month</span></div>
+              <p className="text-neutral-400 text-xs mb-6">+ 1.5% per transaction</p>
               <ul className="space-y-3 mb-8 flex-1">
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /><span className="text-neutral-600">Draft Invoicing Enabled</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /><span className="text-neutral-600">Payment Links Enabled</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /><span className="text-neutral-600">Unlimited Collection</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /><span className="text-neutral-600">PurpBot AI Enabled</span></li>
               </ul>
-              <Badge variant="outline" className="border-purp-200 bg-purp-50 text-purp-900 w-full justify-center py-2 text-sm">Manual Review (CAC Docs)</Badge>
+              <Link href="/onboarding/corporate">
+                <Button variant="outline" className="w-full border-2 border-purp-200 text-purp-900 hover:bg-purp-50 font-semibold h-11">Get Corporate</Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -288,9 +296,9 @@ export default function LandingPage() {
             honour every partial payment, and eliminate invoice chaos.
           </p>
           <div className="mt-10">
-            <Link href="/register">
+            <Link href="/onboarding">
               <Button size="lg" className="bg-white text-purp-900 hover:bg-purp-100 font-semibold px-10 h-12 text-base">
-                Get Started Free
+                View Plans & Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>

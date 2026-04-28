@@ -59,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex-1 w-full flex bg-purp-50">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex lg:w-64 bg-purp-900 flex-col fixed inset-y-0 z-30">
+      <aside className="hidden lg:flex lg:w-64 bg-purp-900 flex-col fixed inset-y-0 z-30 print:hidden">
         <div className="p-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center">
@@ -143,9 +143,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 lg:ml-64 print:ml-0 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 bg-white border-b-2 border-purp-200 h-16 flex items-center px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 bg-white border-b-2 border-purp-200 h-16 flex items-center px-4 sm:px-6 lg:px-8 print:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden mr-4 text-purp-900"

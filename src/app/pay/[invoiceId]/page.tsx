@@ -7,8 +7,7 @@ import type { InvoiceWithLineItems, Merchant } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { ShieldCheck, Receipt, Clock, CheckCircle2, Lock, AlertTriangle, Info } from "lucide-react";
-import Script from "next/script";
+import { ShieldCheck, Receipt, Clock, CheckCircle2, Lock, AlertTriangle, Info, AlertCircle } from "lucide-react";
 
 export default function PublicPaymentPortal({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = use(params);
@@ -135,6 +134,33 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
     );
   }
 
+  // Merchant Verification Guard
+  const isMerchantVerified = merchant?.verification_status === "verified";
+  const hasSettlementAccount = !!merchant?.payment_subaccount_code;
+  const isAcceptingPayments = isMerchantVerified && hasSettlementAccount;
+
+  if (!isAcceptingPayments) {
+    return (
+      <div className="flex-1 w-full bg-purp-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-2 border-purp-200">
+          <CardContent className="pt-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-amber-600" />
+            </div>
+            <h1 className="text-xl font-bold text-purp-900">Payments Unavailable</h1>
+            <p className="text-neutral-500">
+              This merchant is currently undergoing verification or has not set up their settlement account. Online payments cannot be accepted at this time.
+            </p>
+            <div className="pt-4 border-t border-purp-100 mt-4">
+              <p className="text-sm font-medium text-purp-900">{businessName}</p>
+              <p className="text-xs text-neutral-500">{invoice.invoice_number}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // ── Payment calculations ──────────────────────────────────────────────────
   const outstandingBalance = Number(invoice.outstanding_balance);
   const grandTotal = Number(invoice.grand_total);
@@ -170,68 +196,9 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
     if (!isValidAmount || !invoice) return;
 
     setIsProcessing(true);
+    setPaymentError(null);
 
-    // Check if Paystack public key is configured
-    const paystackKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-    if (paystackKey && paystackKey !== "pk_test_your_public_key_here" && paystackKey.startsWith("pk_")) {
-      // Live Paystack Inline integration
-      const handler = (window as unknown as Record<string, unknown>).PaystackPop as {
-        setup: (config: Record<string, unknown>) => { openIframe: () => void };
-      } | undefined;
-
-      if (handler) {
-        try {
-          const chargeAmount = invoice.fee_absorption === "customer"
-            ? Math.round(allocation.totalCharge * 100)
-            : Math.round(parsedAmount * 100);
-
-          const payHandler = handler.setup({
-            key: paystackKey,
-            email: invoice.clients?.email || "customer@purpledger.app",
-            amount: chargeAmount,
-            currency: "NGN",
-            ref: `purp_${invoice.id.slice(0, 8)}_${Date.now()}`,
-            metadata: {
-              invoice_id: invoice.id,
-              invoice_number: invoice.invoice_number,
-              merchant_id: invoice.merchant_id,
-              payment_amount: parsedAmount,
-              k_factor: allocation.kFactor,
-            },
-            callback: function(response: any) {
-              // In local dev, webhooks won't work, so we hit the demo endpoint as a fallback 
-              // to actually record the transaction so it works on localhost.
-              if (window.location.hostname === "localhost") {
-                fetch("/api/demo-payment", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    invoiceId: invoice.id,
-                    paymentAmount: parsedAmount,
-                  }),
-                }).catch(e => console.error("Fallback to demo-payment failed", e));
-              }
-              setIsProcessing(false);
-              setSuccess(true);
-            },
-            onClose: function() {
-              setIsProcessing(false);
-            },
-          });
-          payHandler.openIframe();
-          return;
-        } catch (err: any) {
-          console.error("Paystack popup failed to load:", err);
-          setIsProcessing(false);
-          setPaymentError("Payment interface failed to load. Please try again.");
-          return;
-        }
-      }
-    }
-
-    // DEMO MODE: Actually writes to the database via the demo endpoint
     try {
-      setPaymentError(null);
       const res = await fetch("/api/demo-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -240,16 +207,19 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
           paymentAmount: parsedAmount,
         }),
       });
+      
       const result = await res.json();
-      if (result.success) {
-        setSuccess(true);
+      
+      if (result.success && result.authorizationUrl) {
+        // Redirect to Paystack standard checkout page
+        window.location.href = result.authorizationUrl;
       } else {
-        setPaymentError("Payment failed: " + result.error);
+        setPaymentError("Payment initialization failed: " + (result.error || "Unknown error"));
+        setIsProcessing(false);
       }
     } catch (err) {
       setPaymentError("Payment could not be processed. Please try again or contact support.");
       console.error(err);
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -287,7 +257,6 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
 
   return (
     <div className="flex-1 w-full bg-[#F8F7FF] flex flex-col md:flex-row">
-      <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
       {/* Left Panel: Invoice Details */}
       <div className="w-full md:w-5/12 lg:w-1/3 bg-purp-900 text-white p-6 md:p-8 flex flex-col md:h-screen md:sticky md:top-0 md:overflow-y-auto">
         <div className="flex items-center gap-3 mb-10">

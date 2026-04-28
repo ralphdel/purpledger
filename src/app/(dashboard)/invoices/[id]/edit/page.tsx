@@ -11,9 +11,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { getInvoiceById } from "@/lib/data";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { getInvoiceById, getItemCatalog, getDiscountTemplates } from "@/lib/data";
 import { editInvoice } from "@/lib/actions";
-import type { InvoiceWithLineItems } from "@/lib/types";
+import type { InvoiceWithLineItems, ItemCatalog, DiscountTemplate } from "@/lib/types";
 import { calculateInvoiceTotals, formatNaira, getStatusColor, getStatusLabel } from "@/lib/calculations";
 
 interface FormLineItem {
@@ -35,11 +41,17 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [taxPct, setTaxPct] = useState("7.5");
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<FormLineItem[]>([]);
+  const [catalog, setCatalog] = useState<ItemCatalog[]>([]);
+  const [discountTemplates, setDiscountTemplates] = useState<DiscountTemplate[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getInvoiceById(id).then((inv) => {
+    Promise.all([
+      getInvoiceById(id),
+      getItemCatalog(),
+      getDiscountTemplates(),
+    ]).then(([inv, cat, tpls]) => {
       if (inv) {
         setInvoice(inv);
         setDiscountPct(String(inv.discount_pct));
@@ -55,6 +67,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
           }))
         );
       }
+      setCatalog(cat);
+      setDiscountTemplates(tpls);
       setLoading(false);
     });
   }, [id]);
@@ -264,11 +278,31 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
                   >
                     <div className="sm:col-span-5">
                       <Input
+                        list={`catalog-list-${item.id}`}
                         placeholder="e.g. Late Fee, Additional Service"
                         value={item.itemName}
-                        onChange={(e) => updateLineItem(item.id, "itemName", e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateLineItem(item.id, "itemName", val);
+                          const matched = catalog.find((c) => c.item_name === val);
+                          if (matched) {
+                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
+                          }
+                        }}
+                        onInput={(e) => {
+                          const val = e.currentTarget.value;
+                          const matched = catalog.find((c) => c.item_name === val);
+                          if (matched) {
+                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
+                          }
+                        }}
                         className="border-2 border-purp-200 bg-white h-10"
                       />
+                      <datalist id={`catalog-list-${item.id}`}>
+                        {catalog.filter((c) => c.is_active).map((c) => (
+                          <option key={c.id} value={c.item_name} />
+                        ))}
+                      </datalist>
                     </div>
                     <div className="sm:col-span-2">
                       <Input
@@ -322,7 +356,38 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Discount (%)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Discount (%)</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="ghost" size="sm" className="h-6 text-xs text-purp-700 hover:text-purp-900 px-2">
+                            Use Template
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end" className="w-48 border-2 border-purp-200">
+                        {discountTemplates.filter((t) => t.is_active).length === 0 ? (
+                          <div className="px-2 py-3 text-xs text-neutral-500 text-center">
+                            No active templates
+                          </div>
+                        ) : (
+                          discountTemplates
+                            .filter((t) => t.is_active)
+                            .map((t) => (
+                              <DropdownMenuItem
+                                key={t.id}
+                                onClick={() => setDiscountPct(t.percentage.toString())}
+                                className="cursor-pointer flex justify-between"
+                              >
+                                <span>{t.name}</span>
+                                <span className="text-neutral-500 font-mono text-xs">{t.percentage}%</span>
+                              </DropdownMenuItem>
+                            ))
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                   <Input
                     type="number"
                     step="0.01"

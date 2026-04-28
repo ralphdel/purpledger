@@ -18,6 +18,8 @@ import {
   Pencil,
   History,
   User,
+  Wallet,
+  Printer,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,7 @@ import { closeInvoiceManually, reopenInvoice, getInvoiceHistory, sendInvoiceEmai
 import { MANUAL_CLOSE_REASONS } from "@/lib/types";
 import type { InvoiceWithLineItems, Transaction, Merchant, AuditLog } from "@/lib/types";
 import { formatNaira, getStatusColor, getStatusLabel } from "@/lib/calculations";
+import { RecordPaymentDrawer } from "@/components/RecordPaymentDrawer";
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -58,6 +61,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [emailSent, setEmailSent] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const refreshData = async () => {
@@ -199,7 +203,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   // Whether the payment link is active
   const isStarter = merchant?.merchant_tier === "starter";
   const limitExceeded = isStarter || (merchant?.monthly_collection_limit ? monthlyCollected >= merchant.monthly_collection_limit : false);
-  const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") && !limitExceeded;
+  const isLinkActive = (invoice.status === "open" || invoice.status === "partially_paid") && !limitExceeded && invoice.invoice_type !== "record";
 
   const statusIcons: Record<string, React.ElementType> = {
     open: Clock, partially_paid: AlertTriangle, closed: CheckCircle,
@@ -209,6 +213,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   const clientName = invoice.clients?.full_name || "Unknown Client";
   const clientEmail = invoice.clients?.email || "";
+  const isRecordInvoice = invoice.invoice_type === "record";
 
   // History helpers
   const getEventLabel = (eventType: string) => {
@@ -250,6 +255,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <StatusIcon className="mr-1 h-3 w-3" />
                 {getStatusLabel(invoice.status)}
               </Badge>
+              {isRecordInvoice && (
+                <Badge variant="outline" className="border-2 border-neutral-300 bg-neutral-100 text-neutral-700 text-xs font-semibold">
+                  Record
+                </Badge>
+              )}
             </div>
             <p className="text-neutral-500 text-sm mt-0.5">{clientName} · {clientEmail}</p>
           </div>
@@ -258,18 +268,29 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="flex items-center gap-2 flex-wrap">
           {/* Edit Button */}
           {canEdit && (
-            <Link href={`/invoices/${invoice.id}/edit`}>
+            <Link href={`/invoices/${invoice.id}/edit`} className="print:hidden">
               <Button variant="outline" className="border-2 border-purp-200 text-purp-700 hover:bg-purp-100">
                 <Pencil className="mr-2 h-4 w-4" /> Edit Invoice
               </Button>
             </Link>
           )}
 
+          {/* Download PDF Button for Record Invoices */}
+          {isRecordInvoice && (
+            <Button
+              variant="outline"
+              className="border-2 border-purp-200 text-purp-700 hover:bg-purp-100 print:hidden"
+              onClick={() => window.print()}
+            >
+              <Printer className="mr-2 h-4 w-4" /> Download PDF
+            </Button>
+          )}
+
           {/* Reopen Button */}
           {canReopen && (
             <Dialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
               <DialogTrigger
-                render={<Button variant="outline" className="border-2 border-blue-200 text-blue-700 hover:bg-blue-50" />}
+                render={<Button variant="outline" className="border-2 border-blue-200 text-blue-700 hover:bg-blue-50 print:hidden" />}
               >
                 <RotateCcw className="mr-2 h-4 w-4" /> Reopen Invoice
               </DialogTrigger>
@@ -316,7 +337,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           {(invoice.status === "open" || invoice.status === "partially_paid") && (
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
               <DialogTrigger
-                render={<Button variant="outline" className="border-2 border-red-200 text-red-600 hover:bg-red-50" />}
+                render={<Button variant="outline" className="border-2 border-red-200 text-red-600 hover:bg-red-50 print:hidden" />}
               >
                 Close Manually
               </DialogTrigger>
@@ -567,160 +588,183 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Payment Link & QR */}
-          <Card className="border-2 border-purp-200 shadow-none">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold text-purp-900">Payment Link</CardTitle>
-                <Badge
-                  variant="outline"
-                  className={`text-xs font-semibold border ${
-                    isLinkActive
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-gray-100 text-gray-500 border-gray-200"
-                  }`}
+          {/* Record Payment (For Record Invoices) */}
+          {isRecordInvoice && (
+            <Card className="border-2 border-purp-200 shadow-none bg-purp-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-bold text-purp-900">Offline Payment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-neutral-600 mb-4">
+                  This is a record invoice. Payments must be recorded manually to update the balance.
+                </p>
+                <Button 
+                  onClick={() => setPaymentDrawerOpen(true)}
+                  disabled={Number(invoice.outstanding_balance) <= 0 || !canEdit}
+                  className="w-full bg-purp-900 hover:bg-purp-800 text-white font-semibold"
                 >
-                  {isLinkActive ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className={`flex items-center justify-center p-4 bg-white border-2 rounded-lg ${isLinkActive ? "border-purp-200" : "border-gray-200 opacity-50"}`}>
-                <QRCodeSVG
-                  value={paymentUrl}
-                  size={160}
-                  fgColor={isLinkActive ? "#2D1B6B" : "#9CA3AF"}
-                  bgColor="#FFFFFF"
-                  level="H"
-                />
-              </div>
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Record Payment
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
-              {!isLinkActive && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
-                  <p className="font-medium">Payment link is inactive</p>
-                  <p className="mt-0.5">
-                    {limitExceeded
-                      ? isStarter 
-                        ? "Starter Tier — Payment links are disabled. Upgrade your tier to accept live payments."
-                        : "Monthly collection limit reached. Upgrade your tier to accept more payments."
-                      : invoice.status === "expired" || invoice.status === "manually_closed"
-                        ? "Reopen this invoice to reactivate the payment link."
-                        : "This invoice is closed."}
-                  </p>
-                </div>
-              )}
-
-              {/* Only show the link and open portal buttons if the limit is not exceeded. 
-                  If it's closed/expired, we still show them but disabled. 
-                  But if limit exceeded, completely hide them as requested. */}
-              {!limitExceeded && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <div className={`flex-1 px-3 py-2 bg-purp-50 border-2 border-purp-200 rounded-lg text-xs font-mono text-purp-700 truncate ${!isLinkActive ? 'opacity-50' : ''}`}>
-                      {displayLink}
-                    </div>
-                    <Button variant="outline" size="sm" onClick={copyLink} disabled={!isLinkActive} className="border-2 border-purp-200 flex-shrink-0">
-                      {copied ? <CheckCircle className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-
-                  <Link href={isLinkActive ? `/pay/${invoice.id}` : '#'} target={isLinkActive ? "_blank" : undefined}>
-                    <Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100 disabled:opacity-50">
-                      <ExternalLink className="mr-2 h-4 w-4" /> Open Payment Portal
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Share Invoice */}
-          <Card className="border-2 border-purp-200 shadow-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold text-purp-900 flex items-center gap-2">
-                <Share2 className="h-4 w-4" /> Share Invoice
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* WhatsApp */}
-              <Button
-                variant="outline"
-                onClick={shareViaWhatsApp}
-                disabled={!isLinkActive}
-                className="w-full border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-medium disabled:opacity-50"
-              >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                Send via WhatsApp
-              </Button>
-
-              {/* Email */}
-              <Dialog>
-                <DialogTrigger
-                  disabled={!isLinkActive}
-                  render={<Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium disabled:opacity-50" />}
-                >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Send via Email
-                </DialogTrigger>
-                <DialogContent className="border-2 border-purp-200">
-                  <DialogHeader>
-                    <DialogTitle className="text-purp-900">Send Invoice to Email</DialogTitle>
-                    <DialogDescription>
-                      Send {invoice.invoice_number} ({formatNaira(Number(invoice.outstanding_balance))} outstanding) to the client&apos;s email.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Recipient Email</Label>
-                      <Input
-                        type="email"
-                        value={emailTo}
-                        onChange={(e) => setEmailTo(e.target.value)}
-                        className="border-2 border-purp-200 bg-purp-50 h-11"
-                        placeholder="client@email.com"
-                      />
-                    </div>
-                    <div className="bg-purp-50 border border-purp-200 rounded-lg p-3 text-sm">
-                      <p className="text-neutral-500 text-xs mb-2">Email Preview:</p>
-                      <p className="font-medium text-neutral-900">Invoice {invoice.invoice_number} from {merchant?.business_name || "PurpLedger"}</p>
-                      <p className="text-neutral-500 mt-1 text-xs">
-                        Grand Total: {formatNaira(Number(invoice.grand_total))} · Outstanding: {formatNaira(Number(invoice.outstanding_balance))}
-                      </p>
-                      <p className="text-purp-700 mt-2 text-xs font-mono truncate">{paymentUrl}</p>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={sendEmail}
-                      disabled={!emailTo || emailSending}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+          {/* Payment Link & QR (For Collection Invoices) */}
+          {!isRecordInvoice && (
+            <>
+              <Card className="border-2 border-purp-200 shadow-none">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-bold text-purp-900">Payment Link</CardTitle>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs font-semibold border ${
+                        isLinkActive
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-gray-100 text-gray-500 border-gray-200"
+                      }`}
                     >
-                      {emailSent ? (
-                        <><CheckCircle className="mr-2 h-4 w-4" /> Sent!</>
-                      ) : emailSending ? (
-                        "Opening mail client..."
-                      ) : (
-                        <><Send className="mr-2 h-4 w-4" /> Send Email</>
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                      {isLinkActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className={`flex items-center justify-center p-4 bg-white border-2 rounded-lg ${isLinkActive ? "border-purp-200" : "border-gray-200 opacity-50"}`}>
+                    <QRCodeSVG
+                      value={paymentUrl}
+                      size={160}
+                      fgColor={isLinkActive ? "#2D1B6B" : "#9CA3AF"}
+                      bgColor="#FFFFFF"
+                      level="H"
+                    />
+                  </div>
 
-              {/* Copy Link */}
-              <Button
-                variant="outline"
-                onClick={copyLink}
-                className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100 font-medium"
-              >
-                {copied ? (
-                  <><CheckCircle className="mr-2 h-4 w-4 text-emerald-600" /> Link Copied!</>
-                ) : (
-                  <><Copy className="mr-2 h-4 w-4" /> Copy Payment Link</>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                  {!isLinkActive && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
+                      <p className="font-medium">Payment link is inactive</p>
+                      <p className="mt-0.5">
+                        {limitExceeded
+                          ? isStarter 
+                            ? "Starter Tier — Payment links are disabled. Upgrade your tier to accept live payments."
+                            : "Monthly collection limit reached. Upgrade your tier to accept more payments."
+                          : invoice.status === "expired" || invoice.status === "manually_closed"
+                            ? "Reopen this invoice to reactivate the payment link."
+                            : "This invoice is closed."}
+                      </p>
+                    </div>
+                  )}
+
+                  {!limitExceeded && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <div className={`flex-1 px-3 py-2 bg-purp-50 border-2 border-purp-200 rounded-lg text-xs font-mono text-purp-700 truncate ${!isLinkActive ? 'opacity-50' : ''}`}>
+                          {displayLink}
+                        </div>
+                        <Button variant="outline" size="sm" onClick={copyLink} disabled={!isLinkActive} className="border-2 border-purp-200 flex-shrink-0">
+                          {copied ? <CheckCircle className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+
+                      <Link href={isLinkActive ? `/pay/${invoice.id}` : '#'} target={isLinkActive ? "_blank" : undefined}>
+                        <Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100 disabled:opacity-50">
+                          <ExternalLink className="mr-2 h-4 w-4" /> Open Payment Portal
+                        </Button>
+                      </Link>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Share Invoice */}
+              <Card className="border-2 border-purp-200 shadow-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold text-purp-900 flex items-center gap-2">
+                    <Share2 className="h-4 w-4" /> Share Invoice
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* WhatsApp */}
+                  <Button
+                    variant="outline"
+                    onClick={shareViaWhatsApp}
+                    disabled={!isLinkActive}
+                    className="w-full border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-medium disabled:opacity-50"
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Send via WhatsApp
+                  </Button>
+
+                  {/* Email */}
+                  <Dialog>
+                    <DialogTrigger
+                      disabled={!isLinkActive}
+                      render={<Button variant="outline" disabled={!isLinkActive} className="w-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium disabled:opacity-50" />}
+                    >
+                      <Mail className="mr-2 h-4 w-4" />
+                      Send via Email
+                    </DialogTrigger>
+                    <DialogContent className="border-2 border-purp-200">
+                      <DialogHeader>
+                        <DialogTitle className="text-purp-900">Send Invoice to Email</DialogTitle>
+                        <DialogDescription>
+                          Send {invoice.invoice_number} ({formatNaira(Number(invoice.outstanding_balance))} outstanding) to the client&apos;s email.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Recipient Email</Label>
+                          <Input
+                            type="email"
+                            value={emailTo}
+                            onChange={(e) => setEmailTo(e.target.value)}
+                            className="border-2 border-purp-200 bg-purp-50 h-11"
+                            placeholder="client@email.com"
+                          />
+                        </div>
+                        <div className="bg-purp-50 border border-purp-200 rounded-lg p-3 text-sm">
+                          <p className="text-neutral-500 text-xs mb-2">Email Preview:</p>
+                          <p className="font-medium text-neutral-900">Invoice {invoice.invoice_number} from {merchant?.business_name || "PurpLedger"}</p>
+                          <p className="text-neutral-500 mt-1 text-xs">
+                            Grand Total: {formatNaira(Number(invoice.grand_total))} · Outstanding: {formatNaira(Number(invoice.outstanding_balance))}
+                          </p>
+                          <p className="text-purp-700 mt-2 text-xs font-mono truncate">{paymentUrl}</p>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          onClick={sendEmail}
+                          disabled={!emailTo || emailSending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                        >
+                          {emailSent ? (
+                            <><CheckCircle className="mr-2 h-4 w-4" /> Sent!</>
+                          ) : emailSending ? (
+                            "Opening mail client..."
+                          ) : (
+                            <><Send className="mr-2 h-4 w-4" /> Send Email</>
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Copy Link */}
+                  <Button
+                    variant="outline"
+                    onClick={copyLink}
+                    className="w-full border-2 border-purp-200 text-purp-700 hover:bg-purp-100 font-medium"
+                  >
+                    {copied ? (
+                      <><CheckCircle className="mr-2 h-4 w-4 text-emerald-600" /> Link Copied!</>
+                    ) : (
+                      <><Copy className="mr-2 h-4 w-4" /> Copy Payment Link</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           {/* Invoice Metadata */}
           <Card className="border-2 border-purp-200 shadow-none">
@@ -774,6 +818,19 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
       </div>
+      
+      {isRecordInvoice && (
+        <RecordPaymentDrawer
+          open={paymentDrawerOpen}
+          onOpenChange={(open) => {
+            setPaymentDrawerOpen(open);
+            if (!open) refreshData();
+          }}
+          invoiceId={invoice.id}
+          merchantId={invoice.merchant_id}
+          outstandingBalance={Number(invoice.outstanding_balance)}
+        />
+      )}
     </div>
   );
 }

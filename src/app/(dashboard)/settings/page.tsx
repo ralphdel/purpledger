@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Save, Shield, Upload, FileCheck, AlertTriangle, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { Save, Shield, Upload, FileCheck, AlertTriangle, CheckCircle, Clock, ArrowRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -428,6 +429,45 @@ export default function SettingsPage() {
               <strong className="text-purp-900">Current Fee Structure:</strong> Paystack charges
               1.5% + ₦100 per transaction, capped at ₦2,000.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Links */}
+      <Card className="border-2 border-purp-200 shadow-none">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-bold text-purp-900">
+            Advanced Settings
+          </CardTitle>
+          <p className="text-xs text-neutral-500 mt-1">
+            Manage your specialized platform configurations.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Link href="/settings/settlement" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-purp-900">Settlement Account</span>
+                <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+              </div>
+              <p className="text-xs text-neutral-500">Configure your payout bank account for online payments.</p>
+            </Link>
+            
+            <Link href="/settings/catalog" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-purp-900">Item Catalog</span>
+                <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+              </div>
+              <p className="text-xs text-neutral-500">Manage your reusable products and services for invoicing.</p>
+            </Link>
+
+            <Link href="/settings/discount-templates" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-purp-900">Discount Templates</span>
+                <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+              </div>
+              <p className="text-xs text-neutral-500">Save predefined discount rates for quick application.</p>
+            </Link>
           </div>
         </CardContent>
       </Card>

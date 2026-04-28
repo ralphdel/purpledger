@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { sendTeamInviteEmail, sendPasswordResetEmail, sendInvoiceEmail } from "./brevo";
+import { PaymentService } from "@/lib/payment";
 
 // Service role client for admin-level operations
 function getServiceClient() {
@@ -513,7 +514,7 @@ export async function createClientAction(clientData: {
       : digits;
   }
 
-  const { error } = await adminClient
+  const { data, error } = await adminClient
     .from("clients")
     .insert([{
       full_name: clientData.full_name,
@@ -525,22 +526,70 @@ export async function createClientAction(clientData: {
       reminder_enabled: clientData.reminder_enabled ?? false,
       reminder_channels: clientData.reminder_channels ?? [],
       merchant_id: clientData.merchant_id,
-    }]);
+    }])
+    .select()
+    .single();
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/clients");
-  return { success: true };
+  return { success: true, data: data };
+}
+
+export async function updateClientAction(clientId: string, clientData: {
+  full_name: string;
+  email?: string;
+  phone?: string;
+  company_name?: string;
+  address?: string;
+  whatsapp_number?: string;
+  reminder_enabled?: boolean;
+  reminder_channels?: ("email" | "whatsapp")[];
+}) {
+  const adminClient = getServiceClient();
+
+  // Normalise whatsapp_number to international format before storing
+  let normalisedWhatsApp: string | undefined;
+  if (clientData.whatsapp_number) {
+    const digits = clientData.whatsapp_number.replace(/\D/g, "");
+    normalisedWhatsApp = digits.startsWith("0") && digits.length === 11
+      ? "234" + digits.slice(1)
+      : digits;
+  }
+
+  const { data, error } = await adminClient
+    .from("clients")
+    .update({
+      full_name: clientData.full_name,
+      email: clientData.email || null,
+      phone: clientData.phone || null,
+      company_name: clientData.company_name || null,
+      address: clientData.address || null,
+      whatsapp_number: normalisedWhatsApp || null,
+      reminder_enabled: clientData.reminder_enabled ?? false,
+      reminder_channels: clientData.reminder_channels ?? [],
+    })
+    .eq("id", clientId)
+    .select()
+    .single();
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/clients");
+  return { success: true, data: data };
 }
 
 export async function createInvoiceAction(data: {
   merchant_id: string;
   client_id: string;
   invoice_number?: string;
+  invoice_type?: "record" | "collection"; // v2.1
   discount_pct: number;
   tax_pct: number;
   fee_absorption: "business" | "customer";
   pay_by_date?: string;
   notes?: string;
+  payment_notes?: string; // v2.1 (for record invoices)
+  initial_amount_paid?: number; // v2.1 (for record invoices)
+  payment_method?: string; // v2.1
   line_items: { item_name: string; quantity: number; unit_rate: number }[];
 }) {
   const adminClient = getServiceClient();
@@ -564,6 +613,7 @@ export async function createInvoiceAction(data: {
       merchant_id: data.merchant_id,
       client_id: data.client_id,
       invoice_number: invoiceNumber,
+      invoice_type: data.invoice_type || "collection", // v2.1
       status: "open",
       subtotal,
       discount_pct: data.discount_pct,
@@ -571,11 +621,12 @@ export async function createInvoiceAction(data: {
       tax_pct: data.tax_pct,
       tax_value: taxValue,
       grand_total: grandTotal,
-      amount_paid: 0,
-      outstanding_balance: grandTotal,
+      amount_paid: 0, // This will be updated if initial_amount_paid > 0
+      outstanding_balance: grandTotal, // This will be updated if initial_amount_paid > 0
       fee_absorption: data.fee_absorption,
       pay_by_date: data.pay_by_date || null,
       notes: data.notes || null,
+      payment_notes: data.payment_notes || null, // v2.1
       short_link: shortToken,
       qr_code_url: null,
     }])
@@ -607,9 +658,159 @@ export async function createInvoiceAction(data: {
     status: "open"
   });
 
+  // Handle initial payment for Record Invoice
+  if (data.invoice_type === "record" && data.initial_amount_paid && data.initial_amount_paid > 0) {
+    // Note: We avoid making createInvoiceAction too complex. 
+    // We can just call recordManualPaymentAction directly after inserting the line items.
+    const paymentRes = await recordManualPaymentAction({
+      invoice_id: invoice.id,
+      merchant_id: data.merchant_id,
+      amount: data.initial_amount_paid,
+      payment_method: data.payment_method || "cash",
+      date_received: new Date().toISOString().split("T")[0],
+      reference_note: data.payment_notes,
+    });
+    if (!paymentRes.success) {
+      console.error("Failed to record initial payment", paymentRes.error);
+    }
+  }
+
   revalidatePath("/invoices");
   return { success: true, invoiceId: invoice.id };
 }
+
+// ============================================================================
+// MANUAL PAYMENTS (v2.1 Record Invoice)
+// ============================================================================
+
+export async function recordManualPaymentAction(data: {
+  invoice_id: string;
+  merchant_id: string;
+  amount: number;
+  payment_method: string;
+  date_received: string;
+  reference_note?: string;
+}) {
+  const adminClient = getServiceClient();
+
+  // 1. Fetch current invoice to calculate new balances
+  const { data: invoice, error: invError } = await adminClient
+    .from("invoices")
+    .select("amount_paid, outstanding_balance, status")
+    .eq("id", data.invoice_id)
+    .single();
+
+  if (invError || !invoice) return { success: false, error: invError?.message || "Invoice not found" };
+
+  const newAmountPaid = Number(invoice.amount_paid) + data.amount;
+  const newOutstanding = Math.max(0, Number(invoice.outstanding_balance) - data.amount);
+  
+  let newStatus = invoice.status;
+  if (newOutstanding <= 0) {
+    newStatus = "manually_closed";
+  } else if (newAmountPaid > 0) {
+    newStatus = "partially_paid";
+  }
+
+  // 2. Insert manual payment record
+  const { error: mpError } = await adminClient
+    .from("manual_payments")
+    .insert([{
+      invoice_id: data.invoice_id,
+      merchant_id: data.merchant_id,
+      amount: data.amount,
+      payment_method: data.payment_method,
+      date_received: data.date_received,
+      reference_note: data.reference_note || null,
+    }]);
+
+  if (mpError) return { success: false, error: mpError.message };
+
+  // 3. Update invoice totals and status
+  const { error: updateError } = await adminClient
+    .from("invoices")
+    .update({
+      amount_paid: newAmountPaid,
+      outstanding_balance: newOutstanding,
+      status: newStatus,
+    })
+    .eq("id", data.invoice_id);
+
+  if (updateError) return { success: false, error: updateError.message };
+
+  revalidatePath(`/invoices/${data.invoice_id}`);
+  revalidatePath("/invoices");
+  return { success: true };
+}
+
+// ============================================================================
+// ITEM CATALOG (v2.1 FB-003A)
+// ============================================================================
+
+export async function createItemCatalogAction(data: {
+  merchant_id: string;
+  item_name: string;
+  default_rate: number;
+  description?: string;
+  is_active?: boolean;
+}) {
+  const adminClient = getServiceClient();
+  const { error } = await adminClient.from("item_catalog").insert([data]);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/settings/catalog");
+  return { success: true };
+}
+
+export async function updateItemCatalogAction(id: string, data: {
+  item_name?: string;
+  default_rate?: number;
+  description?: string;
+  is_active?: boolean;
+}) {
+  const adminClient = getServiceClient();
+  const { error } = await adminClient.from("item_catalog").update(data).eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/settings/catalog");
+  return { success: true };
+}
+
+export async function incrementItemCatalogUsageAction(id: string) {
+  const adminClient = getServiceClient();
+  // Call RPC to increment or just select and update
+  const { data, error: fetchErr } = await adminClient.from("item_catalog").select("usage_count").eq("id", id).single();
+  if (fetchErr || !data) return;
+  await adminClient.from("item_catalog").update({ usage_count: data.usage_count + 1 }).eq("id", id);
+}
+
+// ============================================================================
+// DISCOUNT TEMPLATES (v2.1 FB-003B)
+// ============================================================================
+
+export async function createDiscountTemplateAction(data: {
+  merchant_id: string;
+  name: string;
+  percentage: number;
+  is_active?: boolean;
+}) {
+  const adminClient = getServiceClient();
+  const { error } = await adminClient.from("discount_templates").insert([data]);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/settings/discount-templates");
+  return { success: true };
+}
+
+export async function updateDiscountTemplateAction(id: string, data: {
+  name?: string;
+  percentage?: number;
+  is_active?: boolean;
+}) {
+  const adminClient = getServiceClient();
+  const { error } = await adminClient.from("discount_templates").update(data).eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/settings/discount-templates");
+  return { success: true };
+}
+
 
 export async function sendInvoiceEmailAction(data: {
   toEmail: string;
@@ -633,4 +834,97 @@ export async function sendInvoiceEmailAction(data: {
     data.payByDate,
     data.paymentUrl
   );
+}
+
+// ── SETTLEMENT ACCOUNT (v2.1 Sprint C-W1) ───────────────────────────────────
+
+export async function setupSettlementAccountAction(merchantId: string, data: {
+  bankCode: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  businessName: string;
+  email: string;
+  phone: string;
+}) {
+  const sb = await createClient();
+  const adminClient = getServiceClient();
+
+  // 1. Verify caller owns merchant
+  const { data: m, error: mErr } = await sb.from("merchants").select("id, payment_subaccount_code").eq("id", merchantId).single();
+  if (mErr || !m) return { success: false, error: "Unauthorized" };
+
+  try {
+    let subaccount;
+    
+    try {
+      if (m.payment_subaccount_code) {
+        // Update existing
+        subaccount = await PaymentService.updateSubaccount(m.payment_subaccount_code, {
+          businessName: data.businessName,
+          bankCode: data.bankCode,
+          accountNumber: data.accountNumber,
+          percentageCharge: 1.5,
+        });
+      } else {
+        // Create new subaccount via PaymentService
+        subaccount = await PaymentService.createSubaccount({
+          businessName: data.businessName,
+          bankCode: data.bankCode,
+          accountNumber: data.accountNumber,
+          percentageCharge: 1.5,
+          primaryContactEmail: data.email,
+          primaryContactName: data.accountName,
+        });
+      }
+    } catch (apiError: any) {
+      // In development, Paystack rejects fake/mock bank details.
+      // Generate a mock subaccount so the full flow can be tested locally.
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("Paystack subaccount API failed, using mock for development:", apiError.message);
+        subaccount = {
+          subaccountCode: `MOCK_SUB_${merchantId.slice(0, 8)}`,
+          businessName: data.businessName,
+          accountNumber: data.accountNumber,
+          settlementBank: data.bankCode,
+        };
+      } else {
+        throw apiError;
+      }
+    }
+
+    if (!subaccount || !subaccount.subaccountCode) {
+      return { success: false, error: "Failed to create or update subaccount. Missing code in response." };
+    }
+
+    // 3. Update DB
+    const { error: dbErr } = await adminClient.from("merchants").update({
+      settlement_bank_name: data.bankName,
+      settlement_bank_code: data.bankCode,
+      settlement_account_number: data.accountNumber,
+      settlement_account_name: data.accountName,
+      payment_subaccount_code: subaccount.subaccountCode,
+      subaccount_verified: true,
+      settlement_activated_at: new Date().toISOString(),
+    }).eq("id", merchantId);
+
+    if (dbErr) throw dbErr;
+
+    // Log to audit
+    await adminClient.from("audit_logs").insert([{
+      event_type: "settlement_account_setup",
+      actor_id: merchantId,
+      actor_role: "merchant",
+      target_id: merchantId,
+      target_type: "merchant",
+      metadata: { bank: data.bankName, account_number: data.accountNumber },
+    }]);
+
+    revalidatePath("/settings/settlement");
+    return { success: true, data: subaccount };
+
+  } catch (error: any) {
+    console.error("setupSettlementAccountAction:", error);
+    return { success: false, error: error.message || "An unexpected error occurred." };
+  }
 }

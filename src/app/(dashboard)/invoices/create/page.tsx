@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Save, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, AlertTriangle, CheckCircle2, FileText, Link as LinkIcon, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +16,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { getClients } from "@/lib/data";
-import type { Client, Merchant } from "@/lib/types";
+import { getClients, getItemCatalog, getDiscountTemplates } from "@/lib/data";
+import type { Client, Merchant, ItemCatalog, DiscountTemplate } from "@/lib/types";
 import { calculateInvoiceTotals, formatNaira } from "@/lib/calculations";
 import { createInvoiceAction } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/client";
+import { CreateClientModal } from "@/components/CreateClientModal";
 
 interface FormLineItem {
   id: string;
@@ -31,13 +38,21 @@ interface FormLineItem {
   discountPct: string;
 }
 
-export default function CreateInvoicePage() {
+function CreateInvoiceForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const defaultType = (searchParams.get("type") as "record" | "collection") || "collection";
   const [clients, setClients] = useState<Client[]>([]);
+  const [catalog, setCatalog] = useState<ItemCatalog[]>([]);
+  const [discountTemplates, setDiscountTemplates] = useState<DiscountTemplate[]>([]);
   const [merchant, setMerchant] = useState<Merchant | null>(null);
-  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"record" | "collection">(defaultType);
+  const [initialAmountPaid, setInitialAmountPaid] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [useCustomNumber, setUseCustomNumber] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [clientId, setClientId] = useState("");
+  const [createClientModalOpen, setCreateClientModalOpen] = useState(false);
   const [discountPct, setDiscountPct] = useState("0");
   const [taxPct, setTaxPct] = useState("7.5");
   const [feeAbsorption, setFeeAbsorption] = useState("business");
@@ -53,7 +68,7 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     getClients().then(setClients);
 
-    // Load merchant context
+    // Load merchant context and their catalog/templates
     const sb = createClient();
     sb.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
@@ -62,7 +77,12 @@ export default function CreateInvoicePage() {
           .select("*")
           .eq("user_id", user.id)
           .single();
-        if (data) setMerchant(data as Merchant);
+        if (data) {
+          setMerchant(data as Merchant);
+          // Fetch catalog and discount templates
+          getItemCatalog(data.id).then(setCatalog);
+          getDiscountTemplates(data.id).then(setDiscountTemplates);
+        }
       }
     });
   }, []);
@@ -129,11 +149,15 @@ export default function CreateInvoicePage() {
       merchant_id: merchant.id,
       client_id: clientId,
       invoice_number: useCustomNumber ? invoiceNumber : undefined,
+      invoice_type: invoiceType,
       discount_pct: parseFloat(discountPct) || 0,
       tax_pct: parseFloat(taxPct) || 0,
-      fee_absorption: feeAbsorption as "business" | "customer",
+      fee_absorption: invoiceType === "record" ? "business" : (feeAbsorption as "business" | "customer"),
       pay_by_date: payByDate || undefined,
       notes: notes || undefined,
+      payment_notes: invoiceType === "record" ? notes : undefined, // Reuse notes for payment ref
+      initial_amount_paid: invoiceType === "record" ? parseFloat(initialAmountPaid) || 0 : 0,
+      payment_method: paymentMethod,
       line_items: lineItems
         .filter((li) => li.itemName.trim())
         .map((li) => {
@@ -176,6 +200,65 @@ export default function CreateInvoicePage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+
+        {/* Invoice Type Selector */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Card
+            className={`cursor-pointer border-2 transition-all shadow-sm ${invoiceType === "record"
+                ? "border-purp-600 bg-purp-50 ring-2 ring-purp-200"
+                : "border-neutral-200 hover:border-purp-300"
+              }`}
+            onClick={() => {
+              setInvoiceType("record");
+              router.replace("/invoices/create?type=record", { scroll: false });
+            }}
+          >
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className={`p-2 rounded-lg ${invoiceType === "record" ? "bg-purp-600 text-white" : "bg-neutral-100 text-neutral-500"}`}>
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className={`font-bold ${invoiceType === "record" ? "text-purp-900" : "text-neutral-700"}`}>Record Invoice</h3>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  For payments handled offline (Cash, Bank Transfer). Does not include a 'Pay Now' button for the client.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`border-2 transition-all shadow-sm ${merchant?.subscription_plan === "starter" ? "opacity-60 bg-neutral-50 cursor-not-allowed" : "cursor-pointer"
+              } ${invoiceType === "collection"
+                ? "border-purp-600 bg-purp-50 ring-2 ring-purp-200"
+                : "border-neutral-200 hover:border-purp-300"
+              }`}
+            onClick={() => {
+              if (merchant?.subscription_plan === "starter") return; // Locked for starter
+              setInvoiceType("collection");
+              router.replace("/invoices/create?type=collection", { scroll: false });
+            }}
+          >
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className={`p-2 rounded-lg ${invoiceType === "collection" ? "bg-purp-600 text-white" : "bg-neutral-100 text-neutral-500"}`}>
+                <LinkIcon className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className={`font-bold ${invoiceType === "collection" ? "text-purp-900" : "text-neutral-700"}`}>Collection Invoice</h3>
+                  {merchant?.subscription_plan === "starter" && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                      <Lock className="h-3 w-3" /> Upgrade
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  Generates a secure payment portal link. Clients can pay directly via Card, Transfer, or USSD.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Client & Invoice Number */}
         <Card className="border-2 border-purp-200 shadow-none">
           <CardHeader className="pb-4">
@@ -189,9 +272,17 @@ export default function CreateInvoicePage() {
                 <Label className="text-sm font-medium">Client</Label>
                 {/* Custom combobox-style select to avoid UUID display bug */}
                 <div className="relative">
-                  <Select value={clientId} onValueChange={(v) => setClientId(v ?? "")}>
+                  <Select
+                    value={clientId}
+                    onValueChange={(v) => {
+                      if (v === "NEW_CLIENT") {
+                        setCreateClientModalOpen(true);
+                      } else {
+                        setClientId(v ?? "");
+                      }
+                    }}
+                  >
                     <SelectTrigger className="border-2 border-purp-200 bg-purp-50 h-11">
-                      {/* Manually render the selected client name instead of relying on SelectValue */}
                       <span className={selectedClient ? "text-neutral-900" : "text-neutral-400"}>
                         {selectedClient
                           ? `${selectedClient.full_name}${selectedClient.company_name ? ` — ${selectedClient.company_name}` : ""}`
@@ -199,6 +290,13 @@ export default function CreateInvoicePage() {
                       </span>
                     </SelectTrigger>
                     <SelectContent className="border-2 border-purp-200">
+                      <SelectItem value="NEW_CLIENT" className="text-purp-700 font-semibold focus:text-purp-800 focus:bg-purp-50">
+                        <span className="flex items-center gap-2">
+                          <Plus className="h-4 w-4" />
+                          New Client
+                        </span>
+                      </SelectItem>
+                      <Separator className="my-1 bg-purp-100" />
                       {clients.length === 0 && (
                         <div className="px-3 py-2 text-sm text-neutral-400">No clients yet</div>
                       )}
@@ -236,7 +334,9 @@ export default function CreateInvoicePage() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Pay-By Date</Label>
+                <Label className="text-sm font-medium">
+                  {invoiceType === "record" ? "Due Date" : "Pay-By Date"}
+                </Label>
                 <Input
                   type="date"
                   value={payByDate}
@@ -244,19 +344,60 @@ export default function CreateInvoicePage() {
                   className="border-2 border-purp-200 bg-purp-50 h-11"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Fee Absorption</Label>
-                <Select value={feeAbsorption} onValueChange={(v) => setFeeAbsorption(v ?? "business")}>
-                  <SelectTrigger className="border-2 border-purp-200 bg-purp-50 h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-2 border-purp-200">
-                    <SelectItem value="business">Business Absorbs</SelectItem>
-                    <SelectItem value="customer">Customer Absorbs</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {invoiceType === "collection" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fee Absorption</Label>
+                  <Select value={feeAbsorption} onValueChange={(v) => setFeeAbsorption(v ?? "business")}>
+                    <SelectTrigger className="border-2 border-purp-200 bg-purp-50 h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-2 border-purp-200">
+                      <SelectItem value="business">Business Absorbs</SelectItem>
+                      <SelectItem value="customer">Customer Absorbs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
+
+            {invoiceType === "record" && (
+              <>
+                <Separator className="bg-purp-200 my-2" />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Initial Amount Paid (Optional)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-neutral-500 font-medium">₦</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={initialAmountPaid}
+                        onChange={(e) => setInitialAmountPaid(e.target.value)}
+                        className="pl-8 border-2 border-purp-200 bg-purp-50 h-11"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Payment Method</Label>
+                    <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "")}>
+                      <SelectTrigger className="border-2 border-purp-200 bg-purp-50 h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-2 border-purp-200">
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="pos">POS</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -302,13 +443,32 @@ export default function CreateInvoicePage() {
                   >
                     <div className="sm:col-span-4">
                       <Input
+                        list={`catalog-list-${item.id}`}
                         placeholder="e.g. Consultation"
                         value={item.itemName}
-                        onChange={(e) =>
-                          updateLineItem(item.id, "itemName", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateLineItem(item.id, "itemName", val);
+                          // Auto-fill rate if matched from catalog
+                          const matched = catalog.find((c) => c.item_name === val);
+                          if (matched) {
+                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
+                          }
+                        }}
+                        onInput={(e) => {
+                          const val = e.currentTarget.value;
+                          const matched = catalog.find((c) => c.item_name === val);
+                          if (matched) {
+                            updateLineItem(item.id, "unitRate", matched.default_rate.toString());
+                          }
+                        }}
                         className="border-2 border-purp-200 bg-white h-10"
                       />
+                      <datalist id={`catalog-list-${item.id}`}>
+                        {catalog.filter((c) => c.is_active).map((c) => (
+                          <option key={c.id} value={c.item_name} />
+                        ))}
+                      </datalist>
                     </div>
                     <div className="sm:col-span-2">
                       <Input
@@ -380,7 +540,27 @@ export default function CreateInvoicePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Discount (%)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Discount (%)</Label>
+                    {discountTemplates.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="text-[10px] uppercase tracking-wider font-bold text-purp-600 bg-purp-50 hover:bg-purp-100 px-2 py-1 rounded">
+                          Use Template
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="border-2 border-purp-200">
+                          {discountTemplates.filter((d) => d.is_active).map((d) => (
+                            <DropdownMenuItem
+                              key={d.id}
+                              onClick={() => setDiscountPct(d.percentage.toString())}
+                              className="font-medium cursor-pointer"
+                            >
+                              {d.name} <span className="ml-auto text-purp-600">{d.percentage}%</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                   <Input
                     type="number"
                     step="0.01"
@@ -483,7 +663,7 @@ export default function CreateInvoicePage() {
                   ) : (
                     <span className="flex items-center gap-2">
                       <Save className="h-4 w-4" />
-                      Create Invoice &amp; Generate Link
+                      {invoiceType === "record" ? "Save Record Invoice" : "Create Invoice & Generate Link"}
                     </span>
                   )}
                 </Button>
@@ -492,6 +672,27 @@ export default function CreateInvoicePage() {
           </Card>
         </div>
       </form>
+
+      {merchant && (
+        <CreateClientModal
+          open={createClientModalOpen}
+          onOpenChange={setCreateClientModalOpen}
+          merchantId={merchant.id}
+          onSuccess={(newClient) => {
+            setClients([...clients, newClient]);
+            setClientId(newClient.id);
+            setCreateClientModalOpen(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+export default function CreateInvoicePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-neutral-500">Loading invoice form...</div>}>
+      <CreateInvoiceForm />
+    </Suspense>
   );
 }

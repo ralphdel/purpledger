@@ -11,13 +11,11 @@
 
 
 -- ============================================================
--- STEP 1: PURGE TEST DATA
+-- STEP 1: PURGE TEST DATA (Safe existence-checking version)
 -- PROTECTED: ralphdel14@yahoo.com — NEVER deleted
 -- ============================================================
 
-BEGIN;
-
--- Safety check: abort if protected admin account is missing
+-- 1. Safety check: abort if protected admin account is missing
 DO $$ DECLARE
   protected_email TEXT := 'ralphdel14@yahoo.com';
   protected_user_id UUID;
@@ -29,54 +27,67 @@ BEGIN
   RAISE NOTICE 'Protected admin confirmed: %', protected_user_id;
 END $$;
 
--- Delete transactional data (FK order: children first)
--- NOTE: payment_events and manual_payments are NEW tables created in Step 3.
--- They do not exist yet — nothing to purge from them.
+-- 2. Delete transactional data (FK order: children first)
+-- We use DO blocks so if a table doesn't exist (like invoice_line_items vs line_items), it just skips it without crashing.
 
-DELETE FROM transactions
-  WHERE merchant_id NOT IN (
-    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'transactions') THEN
+    DELETE FROM transactions WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
 
-DELETE FROM invoice_line_items
-  WHERE invoice_id IN (
-    SELECT id FROM invoices WHERE merchant_id NOT IN (
-      SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-    )
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'invoice_line_items') THEN
+    DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'));
+  END IF;
+END $$;
 
-DELETE FROM invoices
-  WHERE merchant_id NOT IN (
-    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'line_items') THEN
+    DELETE FROM line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'));
+  END IF;
+END $$;
 
-DELETE FROM clients
-  WHERE merchant_id NOT IN (
-    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'invoices') THEN
+    DELETE FROM invoices WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
 
--- item_catalog, discount_templates, onboarding_sessions are NEW tables (created in Step 3).
--- They do not exist yet — nothing to purge from them.
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'clients') THEN
+    DELETE FROM clients WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
 
-DELETE FROM pending_invites
-  WHERE merchant_id NOT IN (
-    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'pending_invites') THEN
+    DELETE FROM pending_invites WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
 
-DELETE FROM merchant_team
-  WHERE merchant_id NOT IN (
-    SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'merchant_team') THEN
+    DELETE FROM merchant_team WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
 
-DELETE FROM audit_logs
-  WHERE actor_id NOT IN (
-    SELECT user_id FROM merchants WHERE email = 'ralphdel14@yahoo.com'
-  )
-  AND actor_id IS NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'team_members') THEN
+    DELETE FROM team_members WHERE merchant_id NOT IN (SELECT id FROM merchants WHERE email = 'ralphdel14@yahoo.com');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'audit_logs') THEN
+    DELETE FROM audit_logs WHERE actor_id NOT IN (SELECT user_id FROM merchants WHERE email = 'ralphdel14@yahoo.com') AND actor_id IS NOT NULL;
+  END IF;
+END $$;
 
 -- Delete merchant records (except protected)
-DELETE FROM merchants
-  WHERE email != 'ralphdel14@yahoo.com';
+DO $$ BEGIN
+  DELETE FROM merchants WHERE email != 'ralphdel14@yahoo.com';
+END $$;
 
 -- Verify protection
 DO $$ BEGIN
@@ -86,10 +97,8 @@ DO $$ BEGIN
   RAISE NOTICE 'Purge complete. Protected admin intact. Remaining merchants: %', (SELECT COUNT(*) FROM merchants);
 END $$;
 
-COMMIT;
-
--- NOTE: Auth users must be purged separately via Supabase Dashboard:
--- Authentication → Users → select all non-admin users → Delete
+-- NOTE: Auth users must be purged separately via Supabase Dashboard
+-- Authentication → Users → select test users → Delete
 -- Leave ralphdel14@yahoo.com intact.
 
 

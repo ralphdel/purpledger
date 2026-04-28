@@ -11,6 +11,8 @@ import type {
   LineItem,
   Transaction,
   AuditLog,
+  ItemCatalog,
+  DiscountTemplate,
 } from "@/lib/types";
 
 // ── Active Merchant ID Resolver ───────────────────────────────────────────────
@@ -64,6 +66,29 @@ export async function getClients(merchantId?: string): Promise<Client[]> {
     .order("created_at", { ascending: false });
   if (error) { console.error("getClients:", error); return []; }
   return (data || []) as Client[];
+}
+
+// ── Catalog & Discounts ──────────────────────────────────────────────────────
+export async function getItemCatalog(merchantId?: string): Promise<ItemCatalog[]> {
+  const mId = merchantId || await getActiveMerchantId();
+  const { data, error } = await supabase()
+    .from("item_catalog")
+    .select("*")
+    .eq("merchant_id", mId)
+    .order("usage_count", { ascending: false });
+  if (error) { console.error("getItemCatalog:", error); return []; }
+  return (data || []) as ItemCatalog[];
+}
+
+export async function getDiscountTemplates(merchantId?: string): Promise<DiscountTemplate[]> {
+  const mId = merchantId || await getActiveMerchantId();
+  const { data, error } = await supabase()
+    .from("discount_templates")
+    .select("*")
+    .eq("merchant_id", mId)
+    .order("percentage", { ascending: true });
+  if (error) { console.error("getDiscountTemplates:", error); return []; }
+  return (data || []) as DiscountTemplate[];
 }
 
 // ── Invoices ────────────────────────────────────────────────────────────────
