@@ -42,7 +42,7 @@ const plans = [
       { text: "Collection Invoices (accept payments)", included: true },
       { text: "BVN verification for instant activation", included: true },
       { text: "Owner + 1 team member", included: true },
-      { text: "₦500,000 monthly collection limit", included: true },
+      { text: "₦5,000,000 monthly collection limit", included: true },
       { text: "Automated email & WhatsApp reminders", included: true },
       { text: "Unlimited collections", included: false },
     ],

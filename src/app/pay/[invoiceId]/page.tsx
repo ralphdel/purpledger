@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { formatNaira, calculateProportionalPayment, getMinimumPayment } from "@/lib/calculations";
 import { getPublicInvoice } from "@/lib/data";
 import type { InvoiceWithLineItems, Merchant } from "@/lib/types";
@@ -16,9 +17,16 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
   const [monthlyCollected, setMonthlyCollected] = useState(0);
   const [loading, setLoading] = useState(true);
   const [inputAmount, setInputAmount] = useState<string>("");
+  const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.has("reference") || searchParams.has("trxref")) {
+      setSuccess(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     getPublicInvoice(invoiceId).then((result) => {
@@ -234,7 +242,7 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
             </div>
             <h1 className="text-2xl font-bold text-purp-900">Payment Successful</h1>
             <p className="text-neutral-500 pb-4">
-              Your payment of <strong className="text-emerald-700">{formatNaira(allocation.amountPaid)}</strong> has been processed securely.
+              Your payment has been processed securely and the ledger has been updated.
             </p>
             <div className="bg-purp-50 p-4 rounded-lg text-left text-sm space-y-2 border border-purp-100">
               <div className="flex justify-between">
@@ -242,8 +250,8 @@ export default function PublicPaymentPortal({ params }: { params: Promise<{ invo
                 <span className="font-medium text-purp-900">{invoice.invoice_number}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Remaining Balance</span>
-                <span className="font-medium text-amber-600">{formatNaira(allocation.newOutstandingBalance)}</span>
+                <span className="text-neutral-500">Current Outstanding Balance</span>
+                <span className="font-medium text-amber-600">{formatNaira(outstandingBalance)}</span>
               </div>
             </div>
           </CardContent>

@@ -258,7 +258,7 @@ export default function LandingPage() {
               <ul className="space-y-3 mb-8 flex-1">
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">Draft Invoicing Enabled</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">Payment Links Enabled</span></li>
-                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">₦500,000 / mo Limit</span></li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">₦5,000,000 / mo Limit</span></li>
                 <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" /><span className="text-white">PurpBot AI Enabled</span></li>
               </ul>
               <Link href="/onboarding/individual">

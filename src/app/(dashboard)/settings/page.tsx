@@ -174,7 +174,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-sm font-semibold text-blue-800">Individual Account (Tier 1)</p>
                 <p className="text-sm text-blue-700 mt-1">
-                  You can collect up to ₦500,000 per month. To unlock unlimited collections (Tier 2), please submit your CAC Number and Document below.
+                  You can collect up to ₦5,000,000 per month. To unlock unlimited collections (Tier 2), please submit your CAC Number and Document below.
                 </p>
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-sm font-semibold text-purp-900">Starter Account (Tier 0)</p>
                 <p className="text-sm text-neutral-600 mt-1">
-                  Your collection limit is currently ₦0. To start accepting payments (₦500,000/month), please submit your BVN for instant Tier 1 verification.
+                  Your collection limit is currently ₦0. To start accepting payments (₦5,000,000/month), please submit your BVN for instant Tier 1 verification.
                 </p>
               </div>
             </div>
