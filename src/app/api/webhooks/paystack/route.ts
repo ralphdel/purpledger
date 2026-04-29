@@ -33,7 +33,73 @@ export async function POST(request: Request) {
     return handleSubscriptionPayment(metadata, amount, reference);
   }
 
+  if (paymentType === "subscription_upgrade") {
+    return handleSubscriptionUpgrade(metadata, amount, reference);
+  }
+
   return handleInvoicePayment(metadata, amount, reference, channel);
+}
+
+// ── Subscription Upgrade Handler ─────────────────────────────────────────────
+// Fires when an existing merchant upgrades their plan from the dashboard.
+
+async function handleSubscriptionUpgrade(
+  metadata: Record<string, unknown>,
+  amount: number,
+  reference: string
+) {
+  const merchantId = metadata?.merchant_id as string | undefined;
+  const newPlan = metadata?.new_plan as "individual" | "corporate" | undefined;
+
+  if (!merchantId || !newPlan) {
+    console.error("Upgrade webhook missing required metadata:", metadata);
+    return NextResponse.json({ received: true });
+  }
+
+  // Verify merchant exists
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("id", merchantId)
+    .single();
+
+  if (!merchant) {
+    console.error("Merchant not found for upgrade:", merchantId);
+    return NextResponse.json({ received: true });
+  }
+
+  // Update merchant plan and limits
+  const { error: updateError } = await supabase
+    .from("merchants")
+    .update({
+      subscription_plan: newPlan,
+      merchant_tier: newPlan,
+      monthly_collection_limit: newPlan === "individual" ? 5000000 : 0,
+    })
+    .eq("id", merchantId);
+
+  if (updateError) {
+    console.error("Failed to upgrade merchant:", updateError.message);
+    return NextResponse.json({ error: "Merchant upgrade failed" }, { status: 500 });
+  }
+
+  // Log to audit
+  await supabase.from("audit_logs").insert({
+    event_type: "subscription_upgraded",
+    actor_id: null,
+    actor_role: "system",
+    target_id: merchantId,
+    target_type: "merchant",
+    metadata: {
+      actor_name: "System (Paystack Webhook)",
+      new_plan: newPlan,
+      reference,
+      amount_ngn: amount / 100,
+    },
+  });
+
+  console.log(`✅ Subscription upgraded: Merchant ${merchantId} → ${newPlan} plan — ${reference}`);
+  return NextResponse.json({ received: true });
 }
 
 // ── Subscription Payment Handler ─────────────────────────────────────────────

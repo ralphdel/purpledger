@@ -15,7 +15,7 @@ const plans = [
     icon: Sparkles,
     highlight: false,
     cta: "Get Started Free",
-    href: "/register",
+    href: "/onboarding/starter",
     badge: null,
     features: [
       { text: "Unlimited Record-only Invoices", included: true },

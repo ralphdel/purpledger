@@ -300,11 +300,11 @@ export async function sendPaymentReceiptEmail(
 export async function sendOnboardingWelcomeEmail(
   toEmail: string,
   businessName: string,
-  plan: "individual" | "corporate",
+  plan: "starter" | "individual" | "corporate",
   setPasswordLink: string
 ) {
-  const planLabel = plan === "individual" ? "Individual" : "Corporate";
-  const planPrice = plan === "individual" ? "₦5,000/month" : "₦20,000/month";
+  const planLabel = plan === "starter" ? "Starter" : plan === "individual" ? "Individual" : "Corporate";
+  const planPrice = plan === "starter" ? "Free" : plan === "individual" ? "₦5,000/month" : "₦20,000/month";
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
   const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
 
@@ -316,7 +316,7 @@ export async function sendOnboardingWelcomeEmail(
       </div>
       <div style="padding: 32px;">
         <p>Hello ${businessName},</p>
-        <p>Your payment for the <strong>PurpLedger ${planLabel} Plan</strong> has been confirmed. Your account is ready.</p>
+        <p>${plan === "starter" ? `Your <strong>PurpLedger ${planLabel} Plan</strong> is now active. Your account is ready.` : `Your payment for the <strong>PurpLedger ${planLabel} Plan</strong> has been confirmed. Your account is ready.`}</p>
         <p>Click the button below to set your password and access your dashboard.</p>
         <div style="text-align: center; margin: 32px 0;">
           <a href="${setPasswordLink}" style="background-color: #4C1D95; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">

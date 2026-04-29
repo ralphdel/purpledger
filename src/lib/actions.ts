@@ -416,6 +416,17 @@ export async function adminDeleteMerchantAction(merchantId: string) {
   await adminClient.from("roles").delete().eq("merchant_id", merchantId);
   await adminClient.from("merchant_team").delete().eq("merchant_id", merchantId);
   await adminClient.from("transactions").delete().eq("merchant_id", merchantId);
+  await adminClient.from("manual_payments").delete().eq("merchant_id", merchantId);
+  await adminClient.from("item_catalog").delete().eq("merchant_id", merchantId);
+  await adminClient.from("discount_templates").delete().eq("merchant_id", merchantId);
+
+  // Fetch invoices to delete associated line_items
+  const { data: invoices } = await adminClient.from("invoices").select("id").eq("merchant_id", merchantId);
+  if (invoices && invoices.length > 0) {
+    const invoiceIds = invoices.map((i) => i.id);
+    await adminClient.from("line_items").delete().in("invoice_id", invoiceIds);
+  }
+
   await adminClient.from("invoices").delete().eq("merchant_id", merchantId);
   await adminClient.from("clients").delete().eq("merchant_id", merchantId);
   
@@ -598,6 +609,24 @@ export async function createInvoiceAction(data: {
   line_items: { item_name: string; quantity: number; unit_rate: number }[];
 }) {
   const adminClient = getServiceClient();
+
+  // Check Starter tier invoice limit (max 10 total invoices)
+  const { data: merchantInfo } = await adminClient
+    .from("merchants")
+    .select("subscription_plan")
+    .eq("id", data.merchant_id)
+    .single();
+
+  if (merchantInfo?.subscription_plan === "starter") {
+    const { count, error: countError } = await adminClient
+      .from("invoices")
+      .select("*", { count: "exact", head: true })
+      .eq("merchant_id", data.merchant_id);
+    
+    if (!countError && count !== null && count >= 10) {
+      return { success: false, error: "Starter plan limit reached: You can only generate up to 10 invoices. Please upgrade your plan to continue." };
+    }
+  }
 
   // Calculate totals server-side
   const subtotal = data.line_items.reduce((sum, li) => sum + li.quantity * li.unit_rate, 0);

@@ -149,7 +149,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Verification Banner */}
-      {merchant && merchant.verification_status !== "verified" && (
+      {merchant && merchant.verification_status !== "verified" && merchant.subscription_plan !== "starter" && (
         <Card className={`border-2 shadow-none ${
           merchant.verification_status === "pending"
             ? "border-amber-300 bg-amber-50/50"

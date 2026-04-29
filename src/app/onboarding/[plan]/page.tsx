@@ -12,7 +12,18 @@ interface OnboardingPageProps {
   params: Promise<{ plan: string }>;
 }
 
-const PLAN_CONFIG = {
+const PLAN_CONFIG: Record<string, any> = {
+  starter: {
+    label: "Starter",
+    price: "Free",
+    priceKobo: 0,
+    features: [
+      "Unlimited Record-only Invoices",
+      "PurpBot AI financial insights",
+      "Invoice sharing (WhatsApp, Email, QR)",
+      "Basic audit log",
+    ],
+  },
   individual: {
     label: "Individual",
     price: "₦5,000/month",
@@ -49,7 +60,7 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Validate plan
-  if (plan !== "individual" && plan !== "corporate") {
+  if (plan !== "starter" && plan !== "individual" && plan !== "corporate") {
     router.replace("/onboarding");
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -58,8 +69,9 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
     );
   }
 
-  const config = PLAN_CONFIG[plan];
+  const config = PLAN_CONFIG[plan as string];
   const Icon = plan === "corporate" ? Building2 : User;
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +93,26 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
         return;
       }
 
-      // 2. Create onboarding session
+      if (plan === "starter") {
+        // Provision directly without Paystack and without session
+        const provisionRes = await fetch("/api/onboarding/provision-starter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, businessName }),
+        });
+        
+        const provisionData = await provisionRes.json();
+        
+        if (provisionData.success) {
+          setIsSuccess(true);
+        } else {
+          setError(provisionData.error || "Failed to create account.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      // 2. Create onboarding session (for paid plans)
       const sessionRes = await fetch("/api/onboarding/create-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,7 +126,7 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
         return;
       }
 
-      // 3. Initialize Paystack subscription payment
+      // 3. Initialize Paystack subscription payment (for paid plans)
       const payRes = await fetch("/api/onboarding/initialize-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -123,6 +154,43 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
       setLoading(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <header className="py-6 px-6 md:px-12 flex items-center gap-2 bg-white border-b border-neutral-100">
+          <div className="w-8 h-8 bg-purp-900 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">P</span>
+          </div>
+          <span className="text-xl font-bold text-purp-900">PurpLedger</span>
+        </header>
+        <div className="flex-1 flex flex-col md:flex-row">
+          <div className="w-full md:w-1/2 p-6 md:p-12 lg:p-24 flex items-center justify-center bg-purp-50">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-purp-100 p-8 text-center space-y-6">
+              <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-purp-900">Account Created!</h2>
+              <p className="text-neutral-600 text-lg">
+                Your free Starter workspace for <strong>{businessName}</strong> is ready.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm">
+                <strong>Next Step:</strong> Check your inbox ({email}). We've sent you a secure link to set your password and log into your dashboard.
+              </div>
+            </div>
+          </div>
+          <div className="hidden md:flex w-1/2 bg-purp-900 p-12 lg:p-24 flex-col justify-between text-white">
+            <div className="max-w-lg">
+              <h2 className="text-4xl font-bold mb-6">Welcome to the future of invoicing.</h2>
+              <p className="text-purp-200 text-lg">
+                You're just one click away from smart ledger tracking and seamless record keeping.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-purp-50 flex items-center justify-center px-4 py-12">
@@ -157,7 +225,7 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
                 </p>
               </div>
               <ul className="space-y-3">
-                {config.features.map((f) => (
+                {config.features.map((f: string) => (
                   <li key={f} className="flex items-start gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                     <span className="text-purp-100">{f}</span>
@@ -213,19 +281,22 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
               </div>
 
               <Button
-                type="submit"
-                disabled={loading}
-                className="w-full h-12 bg-purp-900 hover:bg-purp-700 text-white font-semibold text-base mt-2"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Pay {config.price} Securely
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                )}
-              </Button>
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-12 bg-purp-900 hover:bg-purp-800 text-white font-bold text-base mt-2"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Setting up...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-between w-full px-2">
+                      <span>{plan === "starter" ? "Create Free Account" : `Pay ${config.price.split("/")[0]}`}</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                  )}
+                </Button>
             </form>
 
             <div className="mt-6 pt-6 border-t border-purp-100 text-center">

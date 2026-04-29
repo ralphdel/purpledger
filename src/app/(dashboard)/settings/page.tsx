@@ -37,6 +37,29 @@ export default function SettingsPage() {
   const [kycSubmitting, setKycSubmitting] = useState(false);
   const [kycSuccess, setKycSuccess] = useState(false);
   const [kycError, setKycError] = useState<string | null>(null);
+  const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
+
+  const handleUpgrade = async (newPlan: "individual" | "corporate") => {
+    setUpgradingPlan(newPlan);
+    setKycError(null);
+    try {
+      const res = await fetch("/api/payment/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPlan }),
+      });
+      const data = await res.json();
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl;
+      } else {
+        setKycError(data.error || "Failed to initialize upgrade");
+        setUpgradingPlan(null);
+      }
+    } catch (e) {
+      setKycError("An error occurred while initializing upgrade");
+      setUpgradingPlan(null);
+    }
+  };
 
   useEffect(() => {
     getMerchant().then((m) => {
@@ -61,6 +84,12 @@ export default function SettingsPage() {
 
   const handleKycSubmit = async () => {
     if (!merchant) return;
+
+    if (!cacNumber && !bvnNumber && !cacFile && !utilityFile) {
+      setKycError("Please provide at least one document or number to submit verification.");
+      return;
+    }
+
     setKycSubmitting(true);
 
     // Simulate document upload processing delay
@@ -160,32 +189,61 @@ export default function SettingsPage() {
           {/* Tier Informational Banner */}
           {(merchant?.subscription_plan || merchant?.merchant_tier) === "corporate" ? (
             <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
-              <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              {verificationStatus === "verified" ? (
+                <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              ) : (
+                <Shield className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              )}
               <div>
                 <p className="text-sm font-semibold text-emerald-800">Corporate Account (Tier 2)</p>
                 <p className="text-sm text-emerald-700 mt-1">
-                  Your account is fully verified. You have access to unlimited monthly collections and payment links.
+                  {verificationStatus === "verified"
+                    ? "Your account is fully verified. You have access to unlimited monthly collections and payment links."
+                    : "Please complete your verification below to activate your unlimited monthly collections and payment links."}
                 </p>
               </div>
             </div>
           ) : (merchant?.subscription_plan || merchant?.merchant_tier) === "individual" ? (
-            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-              <Shield className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-blue-800">Individual Account (Tier 1)</p>
-                <p className="text-sm text-blue-700 mt-1">
-                  You can collect up to ₦5,000,000 per month. To unlock unlimited collections (Tier 2), please submit your CAC Number and Document below.
-                </p>
+            <div className="flex items-start justify-between gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4 flex-col md:flex-row">
+              <div className="flex gap-3">
+                <Shield className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">Individual Account (Tier 1)</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    {verificationStatus === "verified"
+                      ? "Your account is verified. You can collect up to ₦5,000,000 per month. Upgrade to Corporate to unlock unlimited collections and team members."
+                      : "Please complete your BVN verification below to activate your ₦5,000,000 monthly collection limit. Upgrade to Corporate to unlock unlimited collections."}
+                  </p>
+                </div>
               </div>
+              <Link href="/settings/upgrade/corporate">
+                <Button className="bg-purp-900 hover:bg-purp-800 text-white shrink-0">
+                  Upgrade to Corporate
+                </Button>
+              </Link>
             </div>
           ) : (
-            <div className="flex items-start gap-3 p-4 bg-purp-50 border border-purp-200 rounded-lg mb-4">
-              <Shield className="h-5 w-5 text-purp-700 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-purp-900">Starter Account (Tier 0)</p>
-                <p className="text-sm text-neutral-600 mt-1">
-                  Your collection limit is currently ₦0. To start accepting payments (₦5,000,000/month), please submit your BVN for instant Tier 1 verification.
-                </p>
+            <div className="flex items-start justify-between gap-3 p-4 bg-purp-50 border border-purp-200 rounded-lg mb-4 flex-col md:flex-row">
+              <div className="flex gap-3">
+                <Shield className="h-5 w-5 text-purp-700 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-purp-900">Starter Account (Free)</p>
+                  <p className="text-sm text-neutral-600 mt-1">
+                    You can generate up to 10 invoices in total to test the platform. To collect live payments (₦5M/month) and unlock more invoices, upgrade your plan.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                <Link href="/settings/upgrade/individual">
+                  <Button className="w-full sm:w-auto bg-white border border-purp-200 text-purp-900 hover:bg-purp-50">
+                    Upgrade to Individual
+                  </Button>
+                </Link>
+                <Link href="/settings/upgrade/corporate">
+                  <Button className="w-full sm:w-auto bg-purp-900 hover:bg-purp-800 text-white">
+                    Upgrade to Corporate
+                  </Button>
+                </Link>
               </div>
             </div>
           )}

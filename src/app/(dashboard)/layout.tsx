@@ -44,7 +44,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [merchant, setMerchant] = useState<Merchant | null>(null);
 
   useEffect(() => {
-    getMerchant().then(setMerchant);
+    getMerchant().then((m) => {
+      if (m === null) {
+        window.location.href = "/onboarding";
+      } else {
+        setMerchant(m);
+      }
+    });
   }, []);
 
   const businessName = merchant?.business_name || "PurpLedger";

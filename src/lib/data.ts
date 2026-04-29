@@ -51,7 +51,12 @@ export async function getMerchant(id?: string): Promise<Merchant | null> {
     .select("*")
     .eq("id", mId)
     .single();
-  if (error) { console.error("getMerchant:", error); return null; }
+  if (error) { 
+    if (error.code !== "PGRST116") {
+      console.error("getMerchant:", error); 
+    }
+    return null; 
+  }
   return data as Merchant;
 }
 
