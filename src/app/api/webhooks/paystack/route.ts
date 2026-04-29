@@ -298,7 +298,7 @@ async function handleInvoicePayment(
   channel: string
 ) {
   const invoiceId: string = metadata?.invoice_id as string;
-  const paymentAmount: number = metadata?.payment_amount as number;
+  const paymentAmount: number = Number(metadata?.payment_amount);
 
   if (!invoiceId || !paymentAmount) {
     console.error("Webhook missing invoice_id or payment_amount in metadata");
