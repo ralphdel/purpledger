@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
-import { Save, Shield, Upload, FileCheck, AlertTriangle, CheckCircle, Clock, ArrowRight, ExternalLink } from "lucide-react";
+import { Save, Shield, Upload, FileCheck, AlertTriangle, CheckCircle, Clock, ArrowRight, ExternalLink, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,8 +20,12 @@ import { getMerchant } from "@/lib/data";
 import { submitKycAction } from "@/lib/actions";
 import type { Merchant } from "@/lib/types";
 
+const CURRENT_PLATFORM_VERSION = 1;
+
 export default function SettingsPage() {
   const [businessName, setBusinessName] = useState("");
+  const [tradingName, setTradingName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [feeDefault, setFeeDefault] = useState<"business" | "customer">("business");
@@ -65,21 +69,42 @@ export default function SettingsPage() {
     getMerchant().then((m) => {
       if (m) {
         setMerchant(m);
-        setBusinessName(m.business_name);
+        const tier = m.subscription_plan || m.merchant_tier || "starter";
+        const hasConfirmed = (m.platform_version ?? 0) >= 1;
+        // For Corporate: only prefill business_name if they've already confirmed (platform_version >= 1)
+        // Otherwise leave blank so they must explicitly set or toggle "Same as Trading Name"
+        if (tier === "corporate" && !hasConfirmed) {
+          setBusinessName("");
+        } else {
+          setBusinessName(m.business_name || "");
+        }
+        setTradingName(m.trading_name || m.business_name || "");
+        setOwnerName(m.owner_name || "");
         setEmail(m.email);
         setPhone(m.phone || "");
         setFeeDefault(m.fee_absorption_default);
         setBvnNumber(m.bvn || "");
         setCacNumber(m.cac_number || "");
-        setFeeDefault(m.fee_absorption_default);
       }
       setLoading(false);
     });
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!merchant) return;
     setSaving(true);
-    setTimeout(() => setSaving(false), 800);
+    const effectiveTier = merchant.subscription_plan || merchant.merchant_tier || "starter";
+    const updates: Record<string, unknown> = {
+      business_name: effectiveTier === "corporate" ? (businessName || tradingName) : (tradingName || businessName),
+      trading_name: tradingName,
+      owner_name: ownerName || null,
+      phone: phone || null,
+      fee_absorption_default: feeDefault,
+      platform_version: CURRENT_PLATFORM_VERSION,
+    };
+    await submitKycAction(merchant.id, updates);
+    setMerchant({ ...merchant, ...updates } as Merchant);
+    setSaving(false);
   };
 
   const handleKycSubmit = async () => {
@@ -138,6 +163,17 @@ export default function SettingsPage() {
   };
 
   const verificationStatus = merchant?.verification_status || "unverified";
+  const effectiveTier = merchant?.subscription_plan || merchant?.merchant_tier || "starter";
+  const isStarter = effectiveTier === "starter";
+  const isIndividual = effectiveTier === "individual";
+  const isCorporate = effectiveTier === "corporate";
+  const ownerLabel = isCorporate ? "Highest Shareholder's Full Name" : "Owner's Full Name";
+  // If Individual/Corporate and owner_name is missing, treat as unverified
+  const ownerNameMissing = !isStarter && !ownerName.trim();
+  // If Corporate and business_name (registered name) is missing, also block
+  const businessNameMissing = isCorporate && !businessName.trim();
+  const profileIncomplete = ownerNameMissing || businessNameMissing;
+  const effectiveVerificationStatus = profileIncomplete ? "unverified" : verificationStatus;
 
   if (loading) {
     return (
@@ -189,7 +225,7 @@ export default function SettingsPage() {
           {/* Tier Informational Banner */}
           {(merchant?.subscription_plan || merchant?.merchant_tier) === "corporate" ? (
             <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
-              {verificationStatus === "verified" ? (
+              {effectiveVerificationStatus === "verified" ? (
                 <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
               ) : (
                 <Shield className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
@@ -197,7 +233,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-sm font-semibold text-emerald-800">Corporate Account (Tier 2)</p>
                 <p className="text-sm text-emerald-700 mt-1">
-                  {verificationStatus === "verified"
+                  {effectiveVerificationStatus === "verified"
                     ? "Your account is fully verified. You have access to unlimited monthly collections and payment links."
                     : "Please complete your verification below to activate your unlimited monthly collections and payment links."}
                 </p>
@@ -210,7 +246,7 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-semibold text-blue-800">Individual Account (Tier 1)</p>
                   <p className="text-sm text-blue-700 mt-1">
-                    {verificationStatus === "verified"
+                    {effectiveVerificationStatus === "verified"
                       ? "Your account is verified. You can collect up to ₦5,000,000 per month. Upgrade to Corporate to unlock unlimited collections and team members."
                       : "Please complete your BVN verification below to activate your ₦5,000,000 monthly collection limit. Upgrade to Corporate to unlock unlimited collections."}
                   </p>
@@ -248,7 +284,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {verificationStatus === "pending" && (
+          {effectiveVerificationStatus === "pending" && (
             <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
               <Clock className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
               <div>
@@ -260,7 +296,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {verificationStatus === "rejected" && (
+          {effectiveVerificationStatus === "rejected" && (
+
             <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
               <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
               <div>
@@ -284,89 +321,162 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Document Upload Fields */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <FileCheck className="h-4 w-4 text-purp-700" />
-                CAC Number
-                {renderStatusBadge(merchant?.cac_status)}
-              </Label>
-              <Input
-                type="text"
-                placeholder="RC-123456"
-                value={cacNumber}
-                onChange={(e) => setCacNumber(e.target.value)}
-                className="border-2 border-purp-200 bg-white h-11 max-w-xs"
-                disabled={merchant?.cac_status === "verified" || merchant?.cac_status === "pending"}
-              />
+          {profileIncomplete && (
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Profile Update Required</p>
+                <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
+                  {ownerNameMissing && (
+                    <li>Provide your <strong>{ownerLabel}</strong> — required for BVN verification.</li>
+                  )}
+                  {businessNameMissing && (
+                    <li>Provide your <strong>Registered Business Name</strong> — required for CAC / RC Number verification.</li>
+                  )}
+                </ul>
+                <p className="text-xs text-amber-600 mt-2">
+                  Complete these fields in the Business Profile section below and save to proceed with verification.
+                </p>
+              </div>
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <FileCheck className="h-4 w-4 text-purp-700" />
-                CAC Certificate
-                {renderStatusBadge(merchant?.cac_status)}
-              </Label>
-              <div className="flex items-center gap-3">
+          {/* Document Upload Fields — Plan Gated */}
+          <div className="space-y-4">
+            {/* Starter: All locked */}
+            {isStarter && (
+              <div className="relative p-6 bg-neutral-50 border-2 border-neutral-200 rounded-lg text-center">
+                <Lock className="h-8 w-8 mx-auto text-neutral-400 mb-2" />
+                <p className="text-sm font-semibold text-neutral-700">Verification Locked</p>
+                <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+                  Upgrade to Individual or Corporate to submit verification documents and start collecting payments.
+                </p>
+                <div className="flex gap-2 justify-center mt-3">
+                  <Link href="/settings/upgrade/individual">
+                    <Button size="sm" variant="outline" className="border-2 text-sm">Upgrade to Individual</Button>
+                  </Link>
+                  <Link href="/settings/upgrade/corporate">
+                    <Button size="sm" className="bg-purp-900 hover:bg-purp-800 text-white text-sm">Upgrade to Corporate</Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* BVN — available for Individual + Corporate */}
+            {!isStarter && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-purp-700" />
+                  BVN (Bank Verification Number)
+                  {renderStatusBadge(merchant?.bvn_status)}
+                </Label>
+                <p className="text-xs text-neutral-500">Must match the name: <strong>{ownerName || "Set owner name below"}</strong></p>
                 <Input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={(e) => setCacFile(e.target.files?.[0] || null)}
-                  className="border-2 border-purp-200 bg-white h-11 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-purp-100 file:text-purp-700"
+                  type="text"
+                  maxLength={11}
+                  placeholder="22XXXXXXXXX"
+                  value={bvnNumber}
+                  onChange={(e) => setBvnNumber(e.target.value.replace(/\D/g, ""))}
+                  className="border-2 border-purp-200 bg-white h-11 max-w-xs"
+                  disabled={profileIncomplete || merchant?.bvn_status === "verified" || merchant?.bvn_status === "pending"}
+                />
+              </div>
+            )}
+
+            {/* CAC Number — Corporate only */}
+            {isCorporate ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-purp-700" />
+                  CAC Number
+                  {renderStatusBadge(merchant?.cac_status)}
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="RC-123456"
+                  value={cacNumber}
+                  onChange={(e) => setCacNumber(e.target.value)}
+                  className="border-2 border-purp-200 bg-white h-11 max-w-xs"
                   disabled={merchant?.cac_status === "verified" || merchant?.cac_status === "pending"}
                 />
-                {(cacFile || merchant?.cac_document_url) && (
-                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs whitespace-nowrap">
-                    <CheckCircle className="mr-1 h-3 w-3" /> {merchant?.cac_document_url ? 'Uploaded' : 'Selected'}
-                  </Badge>
-                )}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <FileCheck className="h-4 w-4 text-purp-700" />
-                Utility Bill (Proof of Address)
-                {renderStatusBadge(merchant?.utility_status)}
-              </Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={(e) => setUtilityFile(e.target.files?.[0] || null)}
-                  className="border-2 border-purp-200 bg-white h-11 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-purp-100 file:text-purp-700"
-                  disabled={merchant?.utility_status === "verified" || merchant?.utility_status === "pending"}
-                />
-                {(utilityFile || merchant?.utility_document_url) && (
-                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs whitespace-nowrap">
-                    <CheckCircle className="mr-1 h-3 w-3" /> {merchant?.utility_document_url ? 'Uploaded' : 'Selected'}
-                  </Badge>
-                )}
+            ) : isIndividual ? (
+              <div className="relative p-4 bg-neutral-50 border border-neutral-200 rounded-lg opacity-60">
+                <div className="flex items-center gap-2 text-sm text-neutral-500">
+                  <Lock className="h-4 w-4" />
+                  <span>CAC Number — <strong>Available on Corporate plan</strong></span>
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <Shield className="h-4 w-4 text-purp-700" />
-                BVN (Bank Verification Number)
-                {renderStatusBadge(merchant?.bvn_status)}
-              </Label>
-              <Input
-                type="text"
-                maxLength={11}
-                placeholder="22XXXXXXXXX"
-                value={bvnNumber}
-                onChange={(e) => setBvnNumber(e.target.value.replace(/\D/g, ""))}
-                className="border-2 border-purp-200 bg-white h-11 max-w-xs"
-                disabled={merchant?.bvn_status === "verified" || merchant?.bvn_status === "pending"}
-              />
-            </div>
+            {/* CAC Certificate — Corporate only */}
+            {isCorporate ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-purp-700" />
+                  CAC Certificate
+                  {renderStatusBadge(merchant?.cac_status)}
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => setCacFile(e.target.files?.[0] || null)}
+                    className="border-2 border-purp-200 bg-white h-11 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-purp-100 file:text-purp-700"
+                    disabled={merchant?.cac_status === "verified" || merchant?.cac_status === "pending"}
+                  />
+                  {(cacFile || merchant?.cac_document_url) && (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs whitespace-nowrap">
+                      <CheckCircle className="mr-1 h-3 w-3" /> {merchant?.cac_document_url ? 'Uploaded' : 'Selected'}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ) : isIndividual ? (
+              <div className="relative p-4 bg-neutral-50 border border-neutral-200 rounded-lg opacity-60">
+                <div className="flex items-center gap-2 text-sm text-neutral-500">
+                  <Lock className="h-4 w-4" />
+                  <span>CAC Certificate — <strong>Available on Corporate plan</strong></span>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Utility Bill — Corporate only */}
+            {isCorporate ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-purp-700" />
+                  Utility Bill (Proof of Address)
+                  {renderStatusBadge(merchant?.utility_status)}
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => setUtilityFile(e.target.files?.[0] || null)}
+                    className="border-2 border-purp-200 bg-white h-11 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-purp-100 file:text-purp-700"
+                    disabled={merchant?.utility_status === "verified" || merchant?.utility_status === "pending"}
+                  />
+                  {(utilityFile || merchant?.utility_document_url) && (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs whitespace-nowrap">
+                      <CheckCircle className="mr-1 h-3 w-3" /> {merchant?.utility_document_url ? 'Uploaded' : 'Selected'}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ) : isIndividual ? (
+              <div className="relative p-4 bg-neutral-50 border border-neutral-200 rounded-lg opacity-60">
+                <div className="flex items-center gap-2 text-sm text-neutral-500">
+                  <Lock className="h-4 w-4" />
+                  <span>Utility Bill — <strong>Available on Corporate plan</strong></span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <Button
             onClick={handleKycSubmit}
-            disabled={kycSubmitting || (!cacFile && !utilityFile && !bvnNumber && !cacNumber)}
+            disabled={profileIncomplete || kycSubmitting || (!cacFile && !utilityFile && !bvnNumber && !cacNumber)}
             className="w-full h-11 bg-purp-900 hover:bg-purp-700 text-white font-semibold"
           >
             {kycSubmitting ? (
@@ -403,26 +513,76 @@ export default function SettingsPage() {
               Business Profile
             </CardTitle>
             <Badge variant="outline" className={`border-2 text-xs font-semibold ${
-              verificationStatus === "verified"
+              effectiveVerificationStatus === "verified"
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : verificationStatus === "pending"
+                : effectiveVerificationStatus === "pending"
                 ? "bg-amber-50 text-amber-700 border-amber-200"
                 : "bg-neutral-50 text-neutral-600 border-neutral-200"
             }`}>
               <Shield className="mr-1 h-3 w-3" />
-              {verificationStatus === "verified" ? "Verified" : verificationStatus === "pending" ? "Pending" : "Unverified"}
+              {effectiveVerificationStatus === "verified" ? "Verified" : effectiveVerificationStatus === "pending" ? "Pending" : "Unverified"}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Business Name</Label>
+            <Label className="text-sm font-medium">Trading Name <span className="text-red-500">*</span></Label>
+            <p className="text-xs text-neutral-500">The name your business trades under. Shown on invoices and payment links.</p>
             <Input
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
+              value={tradingName}
+              onChange={(e) => setTradingName(e.target.value)}
+              placeholder="e.g. Adebayo Consulting"
               className="border-2 border-purp-200 bg-purp-50 h-11"
             />
           </div>
+          {isCorporate && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Registered Business Name <span className="text-red-500">*</span></Label>
+              <p className="text-xs text-neutral-500">The official name registered with CAC. Used to verify your CAC certificate and RC Number.</p>
+              <div className="flex items-center gap-3 p-3 bg-purp-50/50 border border-purp-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  checked={businessName.trim() !== "" && businessName.trim() === tradingName.trim()}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setBusinessName(tradingName);
+                    } else {
+                      setBusinessName("");
+                    }
+                  }}
+                  className="w-4 h-4 accent-purp-700"
+                />
+                <span className="text-sm text-neutral-700">Same as Trading Name</span>
+              </div>
+              {!(businessName.trim() !== "" && businessName.trim() === tradingName.trim()) && (
+                <Input
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="e.g. Adebayo Consulting Limited"
+                  className="border-2 border-purp-200 bg-purp-50 h-11"
+                />
+              )}
+              {businessNameMissing && (
+                <p className="text-xs text-red-500 font-medium">⚠ Required — CAC/RC verification is blocked until this is provided.</p>
+              )}
+            </div>
+          )}
+          {!isStarter && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">{ownerLabel} <span className="text-red-500">*</span></Label>
+              <p className="text-xs text-neutral-500">
+                {isCorporate
+                  ? "Full legal name of the shareholder with the highest share. Used to verify BVN."
+                  : "Your full legal name as it appears on your BVN. Used for identity verification."}
+              </p>
+              <Input
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                placeholder="e.g. Adebayo Olanrewaju"
+                className="border-2 border-purp-200 bg-purp-50 h-11"
+              />
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Email</Label>
@@ -503,13 +663,23 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-3 gap-4">
-            <Link href="/settings/settlement" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-purp-900">Settlement Account</span>
-                <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+            {isStarter ? (
+              <div className="block p-4 border border-neutral-200 rounded-lg bg-neutral-50 opacity-70">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-neutral-500">Settlement Account</span>
+                  <Lock className="w-4 h-4 text-neutral-400" />
+                </div>
+                <p className="text-xs text-neutral-400">Upgrade to collect online payments and configure payouts.</p>
               </div>
-              <p className="text-xs text-neutral-500">Configure your payout bank account for online payments.</p>
-            </Link>
+            ) : (
+              <Link href="/settings/settlement" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-purp-900">Settlement Account</span>
+                  <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+                </div>
+                <p className="text-xs text-neutral-500">Configure your payout bank account for online payments.</p>
+              </Link>
+            )}
             
             <Link href="/settings/catalog" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
               <div className="flex items-center justify-between mb-2">

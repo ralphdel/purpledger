@@ -5,6 +5,8 @@ export interface Merchant {
   user_id: string | null;
   workspace_code: string | null;
   business_name: string;
+  trading_name: string | null;
+  owner_name: string | null;
   email: string;
   phone: string | null;
   logo_url: string | null;
@@ -35,6 +37,7 @@ export interface Merchant {
   settlement_activated_at: string | null;
   monthly_collection_limit: number;
   holds_pending_review: boolean;
+  platform_version: number;
   created_at: string;
   updated_at: string;
 }

@@ -9,9 +9,9 @@ const supabase = createSupabaseClient(
 
 export async function POST(request: Request) {
   try {
-    const { email, businessName } = await request.json();
+    const { email, tradingName, registeredName, ownerName } = await request.json();
 
-    if (!email || !businessName) {
+    if (!email || !tradingName || !registeredName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       email,
       email_confirm: true,
       user_metadata: {
-        business_name: businessName,
+        business_name: registeredName,
         plan: "starter",
       },
     });
@@ -56,11 +56,20 @@ export async function POST(request: Request) {
       }
     }
 
+    // Update the merchant created by the DB trigger with the new fields
+    if (authUser.user) {
+      await supabase.from("merchants").update({
+        trading_name: tradingName,
+        owner_name: ownerName || null,
+        platform_version: 1, // Marks profile as complete/new schema
+      }).eq("user_id", authUser.user.id);
+    }
+
     // No session to update for Starter plan
 
     // Send welcome email
     try {
-      await sendOnboardingWelcomeEmail(email, businessName, "starter", setPasswordLink);
+      await sendOnboardingWelcomeEmail(email, tradingName, "starter", setPasswordLink);
     } catch (e) {
       console.error("Failed to send welcome email:", e);
     }

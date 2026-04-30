@@ -56,6 +56,8 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
   const { plan } = use(params);
   const [email, setEmail] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [registeredName, setRegisteredName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +100,12 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
         const provisionRes = await fetch("/api/onboarding/provision-starter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, businessName }),
+          body: JSON.stringify({ 
+            email, 
+            tradingName: businessName,
+            registeredName: registeredName || businessName,
+            ownerName 
+          }),
         });
         
         const provisionData = await provisionRes.json();
@@ -116,7 +123,11 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
       const sessionRes = await fetch("/api/onboarding/create-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, businessName, plan }),
+        body: JSON.stringify({ 
+          email, 
+          businessName: registeredName || businessName, 
+          plan 
+        }),
       });
       const sessionData = await sessionRes.json();
 
@@ -132,7 +143,9 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          businessName,
+          tradingName: businessName,
+          registeredName: registeredName || businessName,
+          ownerName,
           plan,
           sessionId: sessionData.sessionId,
           amountKobo: config.priceKobo,
@@ -253,7 +266,7 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="businessName">Business Name</Label>
+                <Label htmlFor="businessName">Trading Name</Label>
                 <Input
                   id="businessName"
                   value={businessName}
@@ -263,6 +276,59 @@ export default function OnboardingPlanPage({ params }: OnboardingPageProps) {
                   className="h-11 border-2 border-purp-200 focus:border-purp-700"
                 />
               </div>
+
+              {plan === "corporate" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="registeredName">Registered Business Name</Label>
+                  <p className="text-xs text-neutral-400">Official name registered with CAC. Used for RC Number verification.</p>
+                  <div className="flex items-center gap-3 p-3 bg-purp-50/50 border border-purp-200 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={registeredName.trim() !== "" && registeredName.trim() === businessName.trim()}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setRegisteredName(businessName);
+                        } else {
+                          setRegisteredName("");
+                        }
+                      }}
+                      className="w-4 h-4 accent-purp-700"
+                    />
+                    <span className="text-sm text-neutral-700">Same as Trading Name</span>
+                  </div>
+                  {!(registeredName.trim() !== "" && registeredName.trim() === businessName.trim()) && (
+                    <Input
+                      id="registeredName"
+                      value={registeredName}
+                      onChange={(e) => setRegisteredName(e.target.value)}
+                      placeholder="e.g. Adebayo Consulting Limited"
+                      required
+                      className="h-11 border-2 border-purp-200 focus:border-purp-700"
+                    />
+                  )}
+                </div>
+              )}
+
+              {plan !== "starter" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ownerName">
+                    {plan === "corporate" ? "Highest Shareholder's Full Name" : "Owner's Full Name"}
+                  </Label>
+                  <Input
+                    id="ownerName"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="e.g. Adebayo Olanrewaju"
+                    required
+                    className="h-11 border-2 border-purp-200 focus:border-purp-700"
+                  />
+                  <p className="text-xs text-neutral-400">
+                    {plan === "corporate"
+                      ? "This name will be used for BVN verification."
+                      : "Must match your BVN for identity verification."}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email Address</Label>

@@ -6,6 +6,10 @@ import Link from "next/link";
 import { Shield, CheckCircle2, ArrowLeft, Loader2, Building2, User, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { getMerchant } from "@/lib/data";
+import type { Merchant } from "@/lib/types";
 
 interface UpgradePageProps {
   params: Promise<{ plan: string }>;
@@ -68,6 +72,18 @@ export default function UpgradePlanPage({ params }: UpgradePageProps) {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [ownerName, setOwnerName] = useState("");
+  const [sameOwner, setSameOwner] = useState(true);
+
+  useState(() => {
+    getMerchant().then((m) => {
+      if (m) {
+        setMerchant(m);
+        setOwnerName(m.owner_name || "");
+      }
+    });
+  });
 
   if (plan !== "individual" && plan !== "corporate") {
     router.replace("/settings");
@@ -78,6 +94,10 @@ export default function UpgradePlanPage({ params }: UpgradePageProps) {
   const Icon = config.icon;
 
   const handleUpgrade = async () => {
+    if (!ownerName.trim()) {
+      setError("Please provide the owner/shareholder name before upgrading.");
+      return;
+    }
     setError(null);
     setLoading(true);
 
@@ -85,7 +105,7 @@ export default function UpgradePlanPage({ params }: UpgradePageProps) {
       const res = await fetch("/api/payment/upgrade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPlan: plan }),
+        body: JSON.stringify({ newPlan: plan, ownerName: ownerName.trim() }),
       });
       const data = await res.json();
       
@@ -172,9 +192,67 @@ export default function UpgradePlanPage({ params }: UpgradePageProps) {
           </Card>
 
           <Card className="border-2 border-purp-200 shadow-none">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-4">
+              {/* Owner Name Field */}
+              {merchant?.subscription_plan === "individual" && plan === "corporate" ? (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Highest Shareholder&apos;s Full Name</Label>
+                  <div className="flex items-center gap-3 p-3 bg-neutral-50 border rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={sameOwner}
+                      onChange={(e) => {
+                        setSameOwner(e.target.checked);
+                        if (e.target.checked) setOwnerName(merchant?.owner_name || "");
+                        else setOwnerName("");
+                      }}
+                      className="w-4 h-4 accent-purp-700"
+                    />
+                    <span className="text-sm text-neutral-700">
+                      Same as current owner ({merchant?.owner_name || "not set"})
+                    </span>
+                  </div>
+                  {!sameOwner && (
+                    <div className="space-y-1">
+                      <Input
+                        value={ownerName}
+                        onChange={(e) => setOwnerName(e.target.value)}
+                        placeholder="Enter new shareholder name"
+                        className="h-11 border-2 border-purp-200"
+                      />
+                      <p className="text-xs text-amber-600">A new BVN verification will be required for this name.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">
+                    {plan === "corporate" ? "Highest Shareholder's Full Name" : "Owner's Full Name"}
+                  </Label>
+                  <Input
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="e.g. Adebayo Olanrewaju"
+                    className="h-11 border-2 border-purp-200"
+                  />
+                  <p className="text-xs text-neutral-500">This name will be used for BVN verification.</p>
+                </div>
+              )}
+
+              {plan === "corporate" && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Registered Business Name</Label>
+                  <Input
+                    value={merchant?.business_name || ""}
+                    disabled
+                    className="h-11 border-2 border-neutral-200 bg-neutral-50"
+                  />
+                  <p className="text-xs text-neutral-500">Your CAC-registered business name. Update in Settings after upgrade if needed.</p>
+                </div>
+              )}
+
               {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-start gap-2 mb-4">
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0 mt-1.5" />
                   {error}
                 </div>

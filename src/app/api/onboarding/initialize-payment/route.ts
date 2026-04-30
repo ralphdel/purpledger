@@ -3,9 +3,9 @@ import { PaymentService } from "@/lib/payment";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
-  const { email, businessName, plan, sessionId, amountKobo } = await request.json();
+  const { email, tradingName, registeredName, ownerName, plan, sessionId, amountKobo } = await request.json();
 
-  if (!email || !businessName || !plan || !sessionId || !amountKobo) {
+  if (!email || !tradingName || !registeredName || !plan || !sessionId || !amountKobo) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -24,7 +24,9 @@ export async function POST(request: Request) {
         type: "subscription",
         plan,
         email,
-        business_name: businessName,
+        business_name: registeredName,
+        trading_name: tradingName,
+        owner_name: ownerName || null,
         session_id: sessionId,
       },
     });

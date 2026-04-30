@@ -95,9 +95,14 @@ export default function MerchantDetailPage() {
 
   const tier = merchant.subscription_plan || merchant.merchant_tier || "starter";
   const limit = Number(merchant.monthly_collection_limit);
+  const hasConfirmed = (merchant.platform_version ?? 0) >= 1;
+  const ownerNameMissing = tier !== "starter" && !merchant.owner_name;
+  const businessNameMissing = tier === "corporate" && (!merchant.business_name || !hasConfirmed);
+  const profileIncomplete = ownerNameMissing || businessNameMissing;
+  const effectiveStatus = profileIncomplete ? "incomplete" : merchant.verification_status;
 
   const tierColor = (t: string) => t === "corporate" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : t === "individual" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-neutral-50 text-neutral-600 border-neutral-200";
-  const statusColor = (s: string) => s === "verified" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : s === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" : s === "rejected" ? "bg-red-50 text-red-700 border-red-200" : s === "suspended" ? "bg-red-100 text-red-800 border-red-300" : "bg-neutral-50 text-neutral-600 border-neutral-200";
+  const statusColor = (s: string) => s === "verified" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : s === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" : s === "rejected" ? "bg-red-50 text-red-700 border-red-200" : s === "suspended" ? "bg-red-100 text-red-800 border-red-300" : s === "incomplete" ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-neutral-50 text-neutral-600 border-neutral-200";
   const docBadge = (s: string | null | undefined) => {
     const st = s || "unverified";
     const icon = st === "verified" ? <CheckCircle className="h-3.5 w-3.5" /> : st === "pending" ? <Clock className="h-3.5 w-3.5" /> : st === "rejected" ? <XCircle className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />;
@@ -120,11 +125,35 @@ export default function MerchantDetailPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => router.push("/admin/merchants")} className="gap-1"><ArrowLeft className="h-4 w-4" /> Back</Button>
-          <h1 className="text-2xl font-bold text-neutral-900">{merchant.business_name}</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">{merchant.trading_name || merchant.business_name}</h1>
           <Badge variant="outline" className={`capitalize border-2 ${tierColor(tier)}`}>{tier}</Badge>
-          <Badge variant="outline" className={`capitalize border-2 ${statusColor(merchant.verification_status)}`}>{merchant.verification_status}</Badge>
+          <Badge variant="outline" className={`capitalize border-2 ${statusColor(effectiveStatus)}`}>{effectiveStatus}</Badge>
+          {profileIncomplete && (
+            <Badge variant="outline" className="border-2 bg-amber-50 text-amber-700 border-amber-200 text-xs">⚠ Incomplete Profile</Badge>
+          )}
         </div>
       </div>
+
+      {/* Owner Name Missing Warning */}
+      {profileIncomplete && (
+        <Card className="border-2 border-amber-200 shadow-none bg-amber-50/50">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Verification Blocked — Profile Incomplete</p>
+              <ul className="text-xs text-amber-700 mt-1 list-disc list-inside space-y-0.5">
+                {ownerNameMissing && (
+                  <li>{tier === "corporate" ? "Highest shareholder" : "Owner"}&apos;s name not provided (required for BVN verification).</li>
+                )}
+                {businessNameMissing && (
+                  <li>Registered business name not provided (required for CAC / RC Number verification).</li>
+                )}
+              </ul>
+              <p className="text-xs text-amber-600 mt-1">The merchant has been notified to update their profile.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Admin Actions Bar */}
       <Card className="border shadow-none">
@@ -169,12 +198,22 @@ export default function MerchantDetailPage() {
           <CardHeader className="pb-3"><CardTitle className="text-base font-bold flex items-center gap-2"><Building2 className="h-4 w-4" /> Profile</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-3">
+              <div><p className="text-neutral-500 text-xs">Trading Name</p><p className="font-medium">{merchant.trading_name || merchant.business_name}</p></div>
+              {tier === "corporate" && (
+                <div>
+                  <p className="text-neutral-500 text-xs">Registered Business Name (CAC)</p>
+                  <p className="font-medium">
+                    {hasConfirmed ? (merchant.business_name || "—") : <span className="text-amber-600">⚠ Needs Confirmation</span>}
+                  </p>
+                </div>
+              )}
+              <div><p className="text-neutral-500 text-xs">{tier === "corporate" ? "Highest Shareholder" : "Owner"}</p><p className="font-medium">{merchant.owner_name || "—"}</p></div>
               <div><p className="text-neutral-500 text-xs">Email</p><p className="font-medium">{merchant.email}</p></div>
               <div><p className="text-neutral-500 text-xs">Phone</p><p className="font-medium">{merchant.phone || "—"}</p></div>
               <div><p className="text-neutral-500 text-xs">Workspace Code</p><p className="font-medium font-mono">{merchant.workspace_code || "—"}</p></div>
               <div><p className="text-neutral-500 text-xs">Joined</p><p className="font-medium">{new Date(merchant.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p></div>
               <div><p className="text-neutral-500 text-xs">Fee Absorption</p><p className="font-medium capitalize">{merchant.fee_absorption_default}</p></div>
-              <div><p className="text-neutral-500 text-xs">Merchant ID</p><p className="font-medium font-mono text-xs">{merchant.id}</p></div>
+              <div><p className="text-neutral-500 text-xs">Profile Version</p><p className="font-medium">{(merchant.platform_version ?? 0) >= 1 ? <span className="text-emerald-700">Updated ✓</span> : <span className="text-amber-600">Needs Update</span>}</p></div>
             </div>
           </CardContent>
         </Card>

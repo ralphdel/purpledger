@@ -178,6 +178,7 @@ export default function AdminMerchantsPage() {
       case "pending": return "bg-amber-50 text-amber-700 border-amber-200";
       case "rejected": return "bg-red-50 text-red-700 border-red-200";
       case "suspended": return "bg-red-100 text-red-800 border-red-300";
+      case "incomplete": return "bg-amber-50 text-amber-600 border-amber-200";
       default: return "bg-neutral-50 text-neutral-600 border-neutral-200";
     }
   };
@@ -285,13 +286,17 @@ export default function AdminMerchantsPage() {
                 const limit = Number(m.monthly_collection_limit);
                 const collected = stats.monthlyCollected;
                 const pct = limit > 0 ? Math.min(100, Math.round((collected / limit) * 100)) : (tier === "corporate" ? 0 : 0);
+                const hasConfirmed = (m.platform_version ?? 0) >= 1;
+                const ownerMissing = tier !== "starter" && !m.owner_name;
+                const bizNameMissing = tier === "corporate" && (!m.business_name || !hasConfirmed);
+                const effectiveStatus = (ownerMissing || bizNameMissing) ? "incomplete" : m.verification_status;
 
                 return (
                   <TableRow key={m.id} className="border-b hover:bg-neutral-50">
                     {/* Business */}
                     <TableCell>
                       <Link href={`/admin/merchants/${m.id}`} className="hover:underline">
-                        <p className="font-medium text-sm text-purp-900">{m.business_name}</p>
+                        <p className="font-medium text-sm text-purp-900">{m.trading_name || m.business_name}</p>
                       </Link>
                       <p className="text-xs text-neutral-500">{maskEmail(m.email)}</p>
                     </TableCell>
@@ -305,8 +310,8 @@ export default function AdminMerchantsPage() {
 
                     {/* Verification */}
                     <TableCell>
-                      <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(m.verification_status)}`}>
-                        {m.verification_status}
+                      <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(effectiveStatus)}`}>
+                        {effectiveStatus}
                       </Badge>
                     </TableCell>
 

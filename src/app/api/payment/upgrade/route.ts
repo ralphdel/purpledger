@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { newPlan } = await request.json();
+    const { newPlan, ownerName } = await request.json();
 
     if (newPlan !== "individual" && newPlan !== "corporate") {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
         type: "subscription_upgrade",
         merchant_id: merchant.id,
         new_plan: newPlan,
+        owner_name: ownerName || null,
       },
     });
 

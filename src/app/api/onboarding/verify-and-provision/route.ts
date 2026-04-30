@@ -43,7 +43,9 @@ export async function POST(request: Request) {
   const sessionId = metadata?.session_id as string | undefined;
   const plan = (metadata?.plan as string) || "corporate";
   const email = (metadata?.email as string) || paystackData.data.customer?.email;
-  const businessName = (metadata?.business_name as string) || "My Business";
+  const businessName = (metadata?.business_name as string) || "My Business"; // The registered name
+  const tradingName = (metadata?.trading_name as string) || businessName;
+  const ownerName = (metadata?.owner_name as string) || null;
 
   if (!sessionId || !email) {
     console.error("Missing session_id or email in Paystack metadata:", metadata);
@@ -135,10 +137,13 @@ export async function POST(request: Request) {
       .update({
         user_id: userId,
         business_name: businessName,
+        trading_name: tradingName,
+        owner_name: ownerName,
         email: email,
         subscription_plan: activePlan,
         merchant_tier: activePlan,
         monthly_collection_limit: activePlan === "individual" ? 5000000 : 0,
+        platform_version: 1,
       })
       .eq("id", merchantId);
 
@@ -168,11 +173,14 @@ export async function POST(request: Request) {
         user_id: userId,
         email,
         business_name: businessName,
+        trading_name: tradingName,
+        owner_name: ownerName,
         subscription_plan: activePlan,
         merchant_tier: activePlan,
         verification_status: "unverified",
         fee_absorption_default: "business",
         monthly_collection_limit: activePlan === "individual" ? 5000000 : 0,
+        platform_version: 1,
       })
       .select("id")
       .single();

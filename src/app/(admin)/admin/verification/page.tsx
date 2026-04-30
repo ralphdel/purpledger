@@ -59,11 +59,19 @@ export default function VerificationQueuePage() {
       });
   }, []);
 
+  const getEffectiveStatus = (m: Merchant) => {
+    const tier = m.subscription_plan || m.merchant_tier || "starter";
+    const hasConfirmed = (m.platform_version ?? 0) >= 1;
+    if (tier !== "starter" && !m.owner_name) return "incomplete";
+    if (tier === "corporate" && (!m.business_name || !hasConfirmed)) return "incomplete";
+    return m.verification_status;
+  };
+
   const getFilteredMerchants = (status: string) => {
     return merchants
-      .filter((m) => status === "all" ? true : m.verification_status === status)
+      .filter((m) => status === "all" ? true : getEffectiveStatus(m) === status)
       .filter((m) =>
-        m.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.trading_name || m.business_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
   };
@@ -74,6 +82,7 @@ export default function VerificationQueuePage() {
       case "pending": return <Clock className="h-4 w-4 text-amber-600" />;
       case "rejected": return <XCircle className="h-4 w-4 text-red-600" />;
       case "suspended": return <ShieldX className="h-4 w-4 text-red-600" />;
+      case "incomplete": return <ShieldAlert className="h-4 w-4 text-amber-500" />;
       default: return <ShieldAlert className="h-4 w-4 text-neutral-400" />;
     }
   };
@@ -84,6 +93,7 @@ export default function VerificationQueuePage() {
       case "pending": return "bg-amber-50 text-amber-700 border-amber-200";
       case "rejected": return "bg-red-50 text-red-700 border-red-200";
       case "suspended": return "bg-red-50 text-red-700 border-red-200";
+      case "incomplete": return "bg-amber-50 text-amber-600 border-amber-200";
       default: return "bg-neutral-50 text-neutral-600 border-neutral-200";
     }
   };
@@ -140,6 +150,7 @@ export default function VerificationQueuePage() {
   };
 
   const pendingCount = merchants.filter((m) => m.verification_status === "pending").length;
+  const incompleteCount = merchants.filter((m) => getEffectiveStatus(m) === "incomplete").length;
 
   if (loading) {
     return (
@@ -167,7 +178,7 @@ export default function VerificationQueuePage() {
       <TableBody>
         {data.map((m) => (
           <TableRow key={m.id} className="border-b hover:bg-neutral-50">
-            <TableCell className="font-medium text-sm">{m.business_name}</TableCell>
+            <TableCell className="font-medium text-sm">{m.trading_name || m.business_name}</TableCell>
             <TableCell className="text-sm text-neutral-500">{m.email}</TableCell>
             <TableCell>
               <Badge variant="outline" className="text-xs capitalize border-2 bg-purple-50 text-purple-700 border-purple-200">
@@ -175,9 +186,9 @@ export default function VerificationQueuePage() {
               </Badge>
             </TableCell>
             <TableCell>
-              <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(m.verification_status)}`}>
-                {statusIcon(m.verification_status)}
-                <span className="ml-1">{m.verification_status}</span>
+              <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(getEffectiveStatus(m))}`}>
+                {statusIcon(getEffectiveStatus(m))}
+                <span className="ml-1">{getEffectiveStatus(m)}</span>
               </Badge>
             </TableCell>
             <TableCell className="text-sm text-neutral-500">
@@ -194,12 +205,29 @@ export default function VerificationQueuePage() {
                 </DialogTrigger>
                 <DialogContent className="max-w-lg">
                   <DialogHeader>
-                    <DialogTitle className="text-neutral-900">Review: {m.business_name}</DialogTitle>
+                    <DialogTitle className="text-neutral-900">Review: {m.trading_name || m.business_name}</DialogTitle>
                     <DialogDescription>
                       Review merchant verification details and take action.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
+                    {/* Owner Name Missing Warning */}
+                    {getEffectiveStatus(m) === "incomplete" && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <ShieldAlert className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-amber-800">
+                          <strong>Profile incomplete — verification blocked.</strong>
+                          <ul className="mt-1 list-disc list-inside space-y-0.5">
+                            {!m.owner_name && (
+                              <li>{(m.subscription_plan || m.merchant_tier) === "corporate" ? "Highest shareholder" : "Owner"}&apos;s name not provided (required for BVN).</li>
+                            )}
+                            {(m.subscription_plan || m.merchant_tier) === "corporate" && (!m.business_name || (m.platform_version ?? 0) < 1) && (
+                              <li>Registered business name needs confirmation (required for CAC/RC verification).</li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-neutral-500">Email</p>
@@ -214,10 +242,14 @@ export default function VerificationQueuePage() {
                         <p className="font-medium capitalize">{selectedMerchant?.subscription_plan || selectedMerchant?.merchant_tier || m.subscription_plan || m.merchant_tier}</p>
                       </div>
                       <div>
-                        <p className="text-neutral-500">Current Status</p>
-                        <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(selectedMerchant?.verification_status || m.verification_status)}`}>
-                          {selectedMerchant?.verification_status || m.verification_status}
+                        <p className="text-neutral-500">Effective Status</p>
+                        <Badge variant="outline" className={`text-xs capitalize border-2 ${statusColor(getEffectiveStatus(selectedMerchant || m))}`}>
+                          {getEffectiveStatus(selectedMerchant || m)}
                         </Badge>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-neutral-500">Owner / Shareholder (for BVN match)</p>
+                        <p className={`font-semibold ${m.owner_name || selectedMerchant?.owner_name ? "text-purp-900" : "text-red-600"}`}>{m.owner_name || selectedMerchant?.owner_name || "⚠ Not provided — verification blocked"}</p>
                       </div>
                     </div>
                     <div className="border-t pt-4 space-y-3">
@@ -352,8 +384,8 @@ export default function VerificationQueuePage() {
       <div>
         <h1 className="text-2xl font-bold text-neutral-900">Verification Queue</h1>
         <p className="text-neutral-500 text-sm mt-1">
-          {pendingCount > 0
-            ? `${pendingCount} merchant(s) awaiting review`
+          {pendingCount > 0 || incompleteCount > 0
+            ? `${pendingCount} pending review, ${incompleteCount} incomplete (missing owner name)`
             : "All merchants have been reviewed"}
         </p>
       </div>
@@ -373,6 +405,9 @@ export default function VerificationQueuePage() {
           <TabsTrigger value="pending" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800">
             Pending {pendingCount > 0 && <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5">{pendingCount}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="incomplete" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
+            Incomplete {incompleteCount > 0 && <Badge className="ml-1.5 bg-amber-400 text-white text-[10px] px-1.5">{incompleteCount}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="verified" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800">
             Verified
           </TabsTrigger>
@@ -386,6 +421,9 @@ export default function VerificationQueuePage() {
 
         <TabsContent value="pending">
           <Card className="border shadow-none"><CardContent className="p-0"><MerchantTable data={getFilteredMerchants("pending")} /></CardContent></Card>
+        </TabsContent>
+        <TabsContent value="incomplete">
+          <Card className="border shadow-none"><CardContent className="p-0"><MerchantTable data={getFilteredMerchants("incomplete")} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="verified">
           <Card className="border shadow-none"><CardContent className="p-0"><MerchantTable data={getFilteredMerchants("verified")} /></CardContent></Card>

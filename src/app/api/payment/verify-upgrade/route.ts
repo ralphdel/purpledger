@@ -29,6 +29,7 @@ export async function POST(request: Request) {
 
     const merchantId = metadata.merchant_id;
     const newPlan = metadata.new_plan;
+    const ownerName = metadata.owner_name || null;
 
     if (!merchantId || !newPlan) {
       return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
         subscription_plan: newPlan,
         merchant_tier: newPlan,
         monthly_collection_limit: newPlan === "individual" ? 5000000 : 0,
+        owner_name: ownerName, // Ensure we persist the owner_name provided during upgrade
       })
       .eq("id", merchantId);
 
