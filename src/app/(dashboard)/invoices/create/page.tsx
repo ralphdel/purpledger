@@ -231,13 +231,13 @@ function CreateInvoiceForm() {
           </Card>
 
           <Card
-            className={`border-2 transition-all shadow-sm ${merchant?.subscription_plan === "starter" ? "opacity-60 bg-neutral-50 cursor-not-allowed" : "cursor-pointer"
+            className={`border-2 transition-all shadow-sm ${(merchant?.subscription_plan === "starter" || merchant?.verification_status !== "verified") ? "opacity-60 bg-neutral-50 cursor-not-allowed" : "cursor-pointer"
               } ${invoiceType === "collection"
                 ? "border-purp-600 bg-purp-50 ring-2 ring-purp-200"
                 : "border-neutral-200 hover:border-purp-300"
               }`}
             onClick={() => {
-              if (merchant?.subscription_plan === "starter") return; // Locked for starter
+              if (merchant?.subscription_plan === "starter" || merchant?.verification_status !== "verified") return; // Locked for starter or unverified
               setInvoiceType("collection");
               router.replace("/invoices/create?type=collection", { scroll: false });
             }}
@@ -249,11 +249,15 @@ function CreateInvoiceForm() {
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <h3 className={`font-bold ${invoiceType === "collection" ? "text-purp-900" : "text-neutral-700"}`}>Collection Invoice</h3>
-                  {merchant?.subscription_plan === "starter" && (
+                  {merchant?.subscription_plan === "starter" ? (
                     <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
                       <Lock className="h-3 w-3" /> Upgrade
                     </span>
-                  )}
+                  ) : merchant?.verification_status !== "verified" ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                      <Lock className="h-3 w-3" /> Verify KYC
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
                   Generates a secure payment portal link. Clients can pay directly via Card, Transfer, or USSD.

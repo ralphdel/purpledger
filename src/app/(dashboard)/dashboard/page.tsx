@@ -247,6 +247,7 @@ export default function DashboardPage() {
                   )}
                 </span>
               </div>
+              <h3 className="text-sm font-semibold text-neutral-600 mb-1">{kpi.title}</h3>
               <p className="text-2xl font-bold text-purp-900">{kpi.value}</p>
               <p className="text-xs text-neutral-500 mt-1">{kpi.description}</p>
             </CardContent>

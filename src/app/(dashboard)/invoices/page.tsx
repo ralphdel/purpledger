@@ -51,8 +51,8 @@ export default function InvoicesPage() {
       setInvoices(invoiceData);
       if (merchantResult) setMerchant(merchantResult);
       
-      // If Starter tier, force back to Record tab
-      if (merchantResult?.subscription_plan === "starter") {
+      // If Starter tier or unverified, force back to Record tab
+      if (merchantResult?.subscription_plan === "starter" || merchantResult?.verification_status !== "verified") {
         setActiveTab("record");
       }
       
@@ -62,7 +62,7 @@ export default function InvoicesPage() {
 
   const handleTabChange = (value: string) => {
     const tab = value as "record" | "collection";
-    if (merchant?.subscription_plan === "starter" && tab === "collection") return;
+    if ((merchant?.subscription_plan === "starter" || merchant?.verification_status !== "verified") && tab === "collection") return;
     setActiveTab(tab);
     localStorage.setItem("purpledger_invoice_tab", tab);
   };
@@ -146,14 +146,18 @@ export default function InvoicesPage() {
           <TabsTrigger 
             value="collection" 
             className="data-[state=active]:bg-white data-[state=active]:text-purp-900 font-semibold data-[state=active]:shadow-sm relative"
-            disabled={merchant?.subscription_plan === "starter"}
+            disabled={merchant?.subscription_plan === "starter" || merchant?.verification_status !== "verified"}
           >
             Collection Invoices
-            {merchant?.subscription_plan === "starter" && (
+            {merchant?.subscription_plan === "starter" ? (
               <span className="absolute -top-2 -right-2 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-amber-200 flex items-center">
                 🔒 PRO
               </span>
-            )}
+            ) : merchant?.verification_status !== "verified" ? (
+              <span className="absolute -top-2 -right-2 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-amber-200 flex items-center">
+                🔒 KYC
+              </span>
+            ) : null}
           </TabsTrigger>
         </TabsList>
 
