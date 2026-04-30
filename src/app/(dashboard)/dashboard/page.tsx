@@ -89,7 +89,7 @@ export default function DashboardPage() {
       change: "+12.5%",
       trend: "up" as const,
       icon: FileText,
-      description: "all time",
+      description: "total to date",
     },
     {
       title: "Total Collected",
@@ -97,7 +97,7 @@ export default function DashboardPage() {
       change: "+8.2%",
       trend: "up" as const,
       icon: DollarSign,
-      description: "all time",
+      description: "total to date",
     },
     {
       title: "Outstanding",

@@ -96,11 +96,18 @@ export default function InvoicesPage() {
             {invoices.length} total invoices · {invoices.filter(i => i.status === "open" || i.status === "partially_paid").length} active
           </p>
         </div>
-        <Link href="/invoices/create">
-          <Button className="bg-purp-900 hover:bg-purp-700 text-white font-semibold">
-            <Plus className="mr-2 h-4 w-4" /> New Invoice
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/invoices/bulk">
+            <Button variant="outline" className="border-2 border-purp-200 text-purp-700 font-semibold bg-white hover:bg-purp-50">
+              Bulk Upload
+            </Button>
+          </Link>
+          <Link href="/invoices/create">
+            <Button className="bg-purp-900 hover:bg-purp-700 text-white font-semibold">
+              <Plus className="mr-2 h-4 w-4" /> New Invoice
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

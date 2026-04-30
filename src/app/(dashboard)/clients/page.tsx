@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Users, Search, Plus, Mail, Phone, Building2,
   Bell, BellOff, MessageCircle, AlertTriangle, Info, MapPin, Edit2,
@@ -115,10 +116,17 @@ export default function ClientsPage() {
           </p>
         </div>
 
-        <Button onClick={() => { setClientToEdit(null); setDialogOpen(true); }} className="bg-purp-900 hover:bg-purp-700 text-white font-semibold">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Client
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/clients/bulk">
+            <Button variant="outline" className="border-2 border-purp-200 text-purp-700 font-semibold bg-white hover:bg-purp-50">
+              Bulk Upload
+            </Button>
+          </Link>
+          <Button onClick={() => { setClientToEdit(null); setDialogOpen(true); }} className="bg-purp-900 hover:bg-purp-700 text-white font-semibold">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Client
+          </Button>
+        </div>
 
         <CreateClientModal
           open={dialogOpen}

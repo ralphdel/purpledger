@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
@@ -370,7 +370,7 @@ export async function sendInviteAction(
   return { success: true };
 }
 
-// ── Admin Actions ─────────────────────────────────────────────────────────────
+// â”€â”€ Admin Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function adminDeactivateMerchantAction(merchantId: string) {
   const adminClient = getServiceClient();
@@ -522,7 +522,7 @@ export async function adminResetPasswordAction(merchantId: string) {
   return { success: true, resetLink };
 }
 
-// ── Team Member Management ────────────────────────────────────────────────────
+// â”€â”€ Team Member Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function deactivateTeamMemberAction(teamMemberId: string, merchantId: string) {
   const adminClient = getServiceClient();
@@ -959,7 +959,7 @@ export async function sendInvoiceEmailAction(data: {
   );
 }
 
-// ── SETTLEMENT ACCOUNT (v2.1 Sprint C-W1) ───────────────────────────────────
+// â”€â”€ SETTLEMENT ACCOUNT (v2.1 Sprint C-W1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function setupSettlementAccountAction(merchantId: string, data: {
   bankCode: string;
@@ -1051,3 +1051,114 @@ export async function setupSettlementAccountAction(merchantId: string, data: {
     return { success: false, error: error.message || "An unexpected error occurred." };
   }
 }
+
+
+export async function bulkCreateClientsAction(merchantId: string, clientsData: any[]) {
+  const adminClient = getServiceClient();
+
+  const formattedClients = clientsData.map(c => {
+    let normalisedWhatsApp: string | null = null;
+    if (c.whatsapp_number) {
+      const digits = String(c.whatsapp_number).replace(/\D/g, "");
+      normalisedWhatsApp = digits.startsWith("0") && digits.length === 11
+        ? "234" + digits.slice(1)
+        : digits;
+    }
+
+    return {
+      full_name: c.full_name,
+      email: c.email || null,
+      phone: c.phone || null,
+      company_name: c.company_name || null,
+      address: c.address || null,
+      whatsapp_number: normalisedWhatsApp,
+      reminder_enabled: c.reminder_enabled ?? false,
+      reminder_channels: c.reminder_channels ?? [],
+      merchant_id: merchantId,
+    };
+  });
+
+  const { data, error } = await adminClient
+    .from("clients")
+    .insert(formattedClients)
+    .select();
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/clients");
+  return { success: true, count: data.length };
+}
+
+export async function bulkCreateInvoicesAction(merchantId: string, invoicesData: any[]) {
+  const adminClient = getServiceClient();
+
+  // Each item in invoicesData represents a fully formed invoice object
+  // { client_id, invoice_type, discount_pct, tax_pct, grand_total, subtotal, etc, lineItems: [] }
+  
+  const createdInvoices = [];
+
+  for (const inv of invoicesData) {
+    // 1. Generate Invoice Number & Hash
+    const { data: countData } = await adminClient
+      .from("invoices")
+      .select("id", { count: "exact" })
+      .eq("merchant_id", merchantId);
+    
+    const count = (countData?.length || 0) + 1;
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count).padStart(4, "0")}`;
+    const invoiceHash = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+    const paymentUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pay/${invoiceHash}`;
+
+    // 2. Insert Invoice
+    const { data: createdInvoice, error: invError } = await adminClient
+      .from("invoices")
+      .insert({
+        merchant_id: merchantId,
+        client_id: inv.client_id,
+        invoice_number: invoiceNumber,
+        invoice_hash: invoiceHash,
+        status: "open",
+        pay_by_date: inv.pay_by_date,
+        subtotal: inv.subtotal,
+        discount_pct: inv.discount_pct || 0,
+        discount_value: inv.discount_value || 0,
+        tax_pct: inv.tax_pct || 0,
+        tax_value: inv.tax_value || 0,
+        grand_total: inv.grand_total,
+        outstanding_balance: inv.grand_total,
+        amount_paid: 0,
+        notes: inv.notes || null,
+        invoice_type: inv.invoice_type || "collection",
+        payment_url: paymentUrl,
+        fee_absorption: inv.fee_absorption || "business",
+        allow_partial_payment: inv.allow_partial_payment || false,
+        partial_payment_pct: inv.partial_payment_pct || null,
+      })
+      .select()
+      .single();
+
+    if (invError || !createdInvoice) {
+      console.error("Failed to insert bulk invoice:", invError);
+      continue; // Skip and continue
+    }
+
+    // 3. Insert Line Items
+    if (inv.lineItems && inv.lineItems.length > 0) {
+      const formattedItems = inv.lineItems.map((li: any, idx: number) => ({
+        invoice_id: createdInvoice.id,
+        item_name: li.item_name,
+        quantity: li.quantity || 1,
+        unit_rate: li.unit_rate || 0,
+        line_total: li.line_total || 0,
+        sort_order: idx + 1,
+      }));
+
+      await adminClient.from("line_items").insert(formattedItems);
+    }
+    
+    createdInvoices.push(createdInvoice);
+  }
+
+  revalidatePath("/invoices");
+  return { success: true, count: createdInvoices.length };
+}
+
