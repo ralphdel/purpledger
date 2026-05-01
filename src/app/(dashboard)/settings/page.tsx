@@ -82,6 +82,22 @@ export default function SettingsPage() {
     }
   };
 
+  const handleRemoveLogo = async () => {
+    if (!merchant) return;
+    setUploadingLogo(true);
+    setKycError(null);
+    try {
+      await submitKycAction(merchant.id, { logo_url: null });
+      setLogoUrl(null);
+      setMerchant({ ...merchant, logo_url: null } as Merchant);
+    } catch (err: any) {
+      console.error("Error removing logo:", err);
+      setKycError("Failed to remove logo: " + err.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const handleUpgrade = async (newPlan: "individual" | "corporate") => {
     setUpgradingPlan(newPlan);
     setKycError(null);
@@ -655,17 +671,29 @@ export default function SettingsPage() {
                   </span>
                 )}
               </div>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  disabled={uploadingLogo}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                />
-                <Button variant="outline" disabled={uploadingLogo} className="border-2 border-purp-200 text-purp-700 pointer-events-none">
-                  {uploadingLogo ? "Uploading..." : "Upload Logo"}
-                </Button>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={uploadingLogo}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <Button variant="outline" disabled={uploadingLogo} className="border-2 border-purp-200 text-purp-700 pointer-events-none">
+                    {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                  </Button>
+                </div>
+                {logoUrl && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleRemoveLogo}
+                    disabled={uploadingLogo} 
+                    className="border-2 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  >
+                    Remove Logo
+                  </Button>
+                )}
               </div>
             </div>
           </div>
