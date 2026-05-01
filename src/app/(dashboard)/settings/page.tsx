@@ -53,6 +53,7 @@ export default function SettingsPage() {
     if (!file || !merchant) return;
 
     setUploadingLogo(true);
+    setKycError(null);
     try {
       const supabase = createClient();
       const fileExt = file.name.split('.').pop();
@@ -75,7 +76,7 @@ export default function SettingsPage() {
       setMerchant({ ...merchant, logo_url: publicUrl } as Merchant);
     } catch (err: any) {
       console.error("Error uploading logo:", err);
-      alert("Failed to upload logo: " + err.message);
+      setKycError("Failed to upload logo: " + err.message + ". Please ensure your database storage policies are set up correctly.");
     } finally {
       setUploadingLogo(false);
     }
