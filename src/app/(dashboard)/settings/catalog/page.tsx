@@ -13,11 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from "@/components/ui/badge";
 import { getItemCatalog, getMerchant } from "@/lib/data";
 import { createItemCatalogAction, updateItemCatalogAction } from "@/lib/actions";
-import type { ItemCatalog } from "@/lib/types";
+import type { ItemCatalog, Merchant } from "@/lib/types";
 import { formatNaira } from "@/lib/calculations";
 
 export default function CatalogSettingsPage() {
   const [items, setItems] = useState<ItemCatalog[]>([]);
+  const [merchant, setMerchant] = useState<(Merchant & { permissions?: Record<string, boolean> }) | null>(null);
   const [merchantId, setMerchantId] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +37,7 @@ export default function CatalogSettingsPage() {
     setLoading(true);
     const m = await getMerchant();
     if (m) {
+      setMerchant(m);
       setMerchantId(m.id);
       const data = await getItemCatalog(m.id);
       setItems(data);
@@ -126,10 +128,12 @@ export default function CatalogSettingsPage() {
             Manage your predefined products and services for quicker invoicing
           </p>
         </div>
+        {(!merchant?.permissions || merchant.permissions.manage_item_catalog) && (
         <Button onClick={handleOpenAdd} className="bg-purp-900 hover:bg-purp-700 text-white">
           <Plus className="mr-2 h-4 w-4" />
           Add Item
         </Button>
+        )}
       </div>
 
       <Card className="border-2 border-purp-200 shadow-none">
@@ -141,9 +145,11 @@ export default function CatalogSettingsPage() {
             <div className="text-center py-12 text-neutral-500">
               <Tag className="w-12 h-12 mx-auto mb-3 opacity-30 text-purp-700" />
               <p>No items in your catalog yet.</p>
+              {(!merchant?.permissions || merchant.permissions.manage_item_catalog) && (
               <Button variant="link" onClick={handleOpenAdd} className="text-purp-700 mt-2">
                 Create your first item
               </Button>
+              )}
             </div>
           ) : (
             <Table>
@@ -178,6 +184,7 @@ export default function CatalogSettingsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
+                      {(!merchant?.permissions || merchant.permissions.manage_item_catalog) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -187,6 +194,7 @@ export default function CatalogSettingsPage() {
                         <Pencil className="h-4 w-4 mr-1.5" />
                         Edit
                       </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

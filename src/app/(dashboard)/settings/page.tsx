@@ -252,6 +252,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ── KYC Verification Section ── */}
+      {(!merchant?.permissions || merchant.permissions.manage_kyc) && (
       <Card className={`border-2 shadow-none ${
         (merchant?.subscription_plan || merchant?.merchant_tier) === "corporate"
           ? "border-emerald-300 bg-emerald-50/30"
@@ -560,8 +561,10 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Business Profile */}
+      {(!merchant?.permissions || merchant.permissions.manage_business) && (
       <Card className="border-2 border-purp-200 shadow-none">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -699,8 +702,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Fee Settings */}
+      {(!merchant?.permissions || merchant.permissions.change_fee_settings) && (
       <Card className="border-2 border-purp-200 shadow-none">
         <CardHeader className="pb-4">
           <CardTitle className="text-base font-bold text-purp-900">
@@ -731,8 +736,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Quick Links */}
+      {(!merchant?.permissions || merchant.permissions.manage_advance_settings || merchant.permissions.manage_settlement_account || merchant.permissions.manage_item_catalog || merchant.permissions.view_item_catalog || merchant.permissions.manage_discount_template || merchant.permissions.view_discount_template) && (
       <Card className="border-2 border-purp-200 shadow-none">
         <CardHeader className="pb-4">
           <CardTitle className="text-base font-bold text-purp-900">
@@ -744,24 +751,27 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-3 gap-4">
-            {isStarter ? (
-              <div className="block p-4 border border-neutral-200 rounded-lg bg-neutral-50 opacity-70">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-neutral-500">Settlement Account</span>
-                  <Lock className="w-4 h-4 text-neutral-400" />
+            {(!merchant?.permissions || merchant.permissions.manage_advance_settings || merchant.permissions.manage_settlement_account) && (
+              isStarter ? (
+                <div className="block p-4 border border-neutral-200 rounded-lg bg-neutral-50 opacity-70">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-neutral-500">Settlement Account</span>
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                  </div>
+                  <p className="text-xs text-neutral-400">Upgrade to collect online payments and configure payouts.</p>
                 </div>
-                <p className="text-xs text-neutral-400">Upgrade to collect online payments and configure payouts.</p>
-              </div>
-            ) : (
-              <Link href="/settings/settlement" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-purp-900">Settlement Account</span>
-                  <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
-                </div>
-                <p className="text-xs text-neutral-500">Configure your payout bank account for online payments.</p>
-              </Link>
+              ) : (
+                <Link href="/settings/settlement" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-purp-900">Settlement Account</span>
+                    <ExternalLink className="w-4 h-4 text-purp-300 group-hover:text-purp-700 transition-colors" />
+                  </div>
+                  <p className="text-xs text-neutral-500">Configure your payout bank account for online payments.</p>
+                </Link>
+              )
             )}
             
+            {(!merchant?.permissions || merchant.permissions.manage_advance_settings || merchant.permissions.manage_item_catalog || merchant.permissions.view_item_catalog) && (
             <Link href="/settings/catalog" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-purp-900">Item Catalog</span>
@@ -769,7 +779,9 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-neutral-500">Manage your reusable products and services for invoicing.</p>
             </Link>
+            )}
 
+            {(!merchant?.permissions || merchant.permissions.manage_advance_settings || merchant.permissions.manage_discount_template || merchant.permissions.view_discount_template) && (
             <Link href="/settings/discount-templates" className="block p-4 border border-purp-200 rounded-lg hover:bg-purp-50 transition-colors group">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-purp-900">Discount Templates</span>
@@ -777,12 +789,15 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-neutral-500">Save predefined discount rates for quick application.</p>
             </Link>
+            )}
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Separator className="bg-purp-200" />
 
+      {(!merchant?.permissions || merchant.permissions.manage_business || merchant.permissions.change_fee_settings) && (
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
@@ -805,6 +820,7 @@ export default function SettingsPage() {
           )}
         </Button>
       </div>
+      )}
     </div>
   );
 }

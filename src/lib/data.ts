@@ -45,7 +45,7 @@ async function getActiveMerchantId(): Promise<string> {
 }
 
 // ── Merchant ────────────────────────────────────────────────────────────────
-export async function getMerchant(id?: string): Promise<(Merchant & { currentUserRole?: string }) | null> {
+export async function getMerchant(id?: string): Promise<(Merchant & { currentUserRole?: string, permissions?: Record<string, boolean> }) | null> {
   const mId = id || await getActiveMerchantId();
   const sb = supabase();
   
@@ -62,18 +62,30 @@ export async function getMerchant(id?: string): Promise<(Merchant & { currentUse
     return null; 
   }
 
-  // Determine current user role
+  // Determine current user role and permissions
   let currentUserRole = "viewer"; // default safe fallback
+  let permissions: Record<string, boolean> = {};
+  
   const { data: { session } } = await sb.auth.getSession();
   const user = session?.user;
 
   if (user) {
     if (data.user_id === user.id) {
       currentUserRole = "owner";
+      // Owners get all permissions
+      permissions = {
+        view_invoices: true, create_invoice: true, edit_invoice: true, record_payment: true,
+        manual_close: true, void_invoice: true, view_clients: true, manage_clients: true,
+        delete_client: true, view_analytics: true, view_transactions: true, manage_kyc: true,
+        change_fee_settings: true, manage_business: true, manage_billing: true, manage_team: true,
+        use_purpbot: true, view_settlements: true, manage_advance_settings: true,
+        manage_settlement_account: true, manage_item_catalog: true, manage_discount_template: true,
+        view_item_catalog: true, view_discount_template: true
+      };
     } else {
       const { data: teamData } = await sb
         .from("merchant_team")
-        .select("roles(name)")
+        .select("roles(name, permissions)")
         .eq("merchant_id", mId)
         .eq("user_id", user.id)
         .single();
@@ -81,6 +93,8 @@ export async function getMerchant(id?: string): Promise<(Merchant & { currentUse
       if (teamData?.roles) {
         // @ts-ignore
         currentUserRole = teamData.roles.name;
+        // @ts-ignore
+        permissions = teamData.roles.permissions || {};
       }
     }
   } else {
@@ -88,10 +102,19 @@ export async function getMerchant(id?: string): Promise<(Merchant & { currentUse
     // Or it's the demo account. If demo account, let's pretend they are owner for demo purposes.
     if (mId === "00000000-0000-0000-0000-000000000001") {
       currentUserRole = "owner";
+      permissions = {
+        view_invoices: true, create_invoice: true, edit_invoice: true, record_payment: true,
+        manual_close: true, void_invoice: true, view_clients: true, manage_clients: true,
+        delete_client: true, view_analytics: true, view_transactions: true, manage_kyc: true,
+        change_fee_settings: true, manage_business: true, manage_billing: true, manage_team: true,
+        use_purpbot: true, view_settlements: true, manage_advance_settings: true,
+        manage_settlement_account: true, manage_item_catalog: true, manage_discount_template: true,
+        view_item_catalog: true, view_discount_template: true
+      };
     }
   }
 
-  return { ...data, currentUserRole } as Merchant & { currentUserRole?: string };
+  return { ...data, currentUserRole, permissions } as Merchant & { currentUserRole?: string, permissions?: Record<string, boolean> };
 }
 
 // ── Subscriptions ───────────────────────────────────────────────────────────

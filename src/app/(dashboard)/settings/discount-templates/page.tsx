@@ -12,10 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from "@/components/ui/badge";
 import { getDiscountTemplates, getMerchant } from "@/lib/data";
 import { createDiscountTemplateAction, updateDiscountTemplateAction } from "@/lib/actions";
-import type { DiscountTemplate } from "@/lib/types";
+import type { DiscountTemplate, Merchant } from "@/lib/types";
 
 export default function DiscountTemplatesSettingsPage() {
   const [templates, setTemplates] = useState<DiscountTemplate[]>([]);
+  const [merchant, setMerchant] = useState<(Merchant & { permissions?: Record<string, boolean> }) | null>(null);
   const [merchantId, setMerchantId] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +34,7 @@ export default function DiscountTemplatesSettingsPage() {
     setLoading(true);
     const m = await getMerchant();
     if (m) {
+      setMerchant(m);
       setMerchantId(m.id);
       const data = await getDiscountTemplates(m.id);
       setTemplates(data);
@@ -125,10 +127,12 @@ export default function DiscountTemplatesSettingsPage() {
             Manage reusable discount templates (e.g. Early Payment, Loyalty)
           </p>
         </div>
+        {(!merchant?.permissions || merchant.permissions.manage_discount_template) && (
         <Button onClick={handleOpenAdd} className="bg-purp-900 hover:bg-purp-700 text-white">
           <Plus className="mr-2 h-4 w-4" />
           Add Template
         </Button>
+        )}
       </div>
 
       <Card className="border-2 border-purp-200 shadow-none">
@@ -140,9 +144,11 @@ export default function DiscountTemplatesSettingsPage() {
             <div className="text-center py-12 text-neutral-500">
               <Percent className="w-12 h-12 mx-auto mb-3 opacity-30 text-purp-700" />
               <p>No discount templates yet.</p>
+              {(!merchant?.permissions || merchant.permissions.manage_discount_template) && (
               <Button variant="link" onClick={handleOpenAdd} className="text-purp-700 mt-2">
                 Create a discount template
               </Button>
+              )}
             </div>
           ) : (
             <Table>
@@ -173,6 +179,7 @@ export default function DiscountTemplatesSettingsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
+                      {(!merchant?.permissions || merchant.permissions.manage_discount_template) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -182,6 +189,7 @@ export default function DiscountTemplatesSettingsPage() {
                         <Pencil className="h-4 w-4 mr-1.5" />
                         Edit
                       </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

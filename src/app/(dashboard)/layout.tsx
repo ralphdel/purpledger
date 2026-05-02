@@ -33,15 +33,22 @@ import type { Merchant, Subscription } from "@/lib/types";
 import { SubscriptionBanner } from "@/components/subscription-banner";
 import { SubscriptionExpiryModal } from "@/components/subscription-expiry-modal";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/clients", label: "Clients", icon: Users },
-  { href: "/accounting-report", label: "Accounting Report", icon: BarChart },
-  { href: "/settlements", label: "Settlements", icon: Banknote },
-  { href: "/team", label: "Team", icon: UsersRound },
-  { href: "/purpbot", label: "PurpBot AI", icon: Bot },
-  { href: "/settings", label: "Settings", icon: Settings },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  requiredPermission?: string;
+}
+
+const allNavItems: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }, // Always visible
+  { href: "/invoices", label: "Invoices", icon: FileText, requiredPermission: "view_invoices" },
+  { href: "/clients", label: "Clients", icon: Users, requiredPermission: "view_clients" },
+  { href: "/accounting-report", label: "Accounting Report", icon: BarChart, requiredPermission: "view_analytics" },
+  { href: "/settlements", label: "Settlements", icon: Banknote, requiredPermission: "view_settlements" },
+  { href: "/team", label: "Team", icon: UsersRound, requiredPermission: "manage_team" },
+  { href: "/purpbot", label: "PurpBot AI", icon: Bot, requiredPermission: "use_purpbot" },
+  { href: "/settings", label: "Settings", icon: Settings }, // Settings is always visible, inner tabs may be restricted
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -86,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 px-4 space-y-1">
-          {navItems.map((item) => {
+          {allNavItems.filter(item => !item.requiredPermission || (merchant && merchant.permissions && merchant.permissions[item.requiredPermission])).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
@@ -135,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
             </div>
             <nav className="flex-1 px-4 space-y-1">
-              {navItems.map((item) => {
+              {allNavItems.filter(item => !item.requiredPermission || (merchant && merchant.permissions && merchant.permissions[item.requiredPermission])).map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link

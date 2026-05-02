@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { completePasswordResetAction } from "../actions";
 
-export default function SetPasswordPage() {
+function SetPasswordForm() {
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const workspaceCode = searchParams.get("workspace") || "";
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,29 +34,18 @@ export default function SetPasswordPage() {
 
     setLoading(true);
 
+    if (!fullName.trim()) {
+      setError("Please enter your full name");
+      return;
+    }
+
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        throw new Error("You must be logged in to set a password.");
+      const result = await completePasswordResetAction(password, fullName.trim(), workspaceCode);
+      if (result.success) {
+        router.push("/dashboard");
+      } else {
+        throw new Error(result.error || "Failed to set password");
       }
-
-      // Update password
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
-
-      // Update merchant_team flag
-      const { error: teamError } = await supabase
-        .from("merchant_team")
-        .update({ must_change_password: false })
-        .eq("user_id", userData.user.id)
-        .eq("must_change_password", true);
-
-      if (teamError) {
-        console.error("Failed to clear must_change_password flag:", teamError);
-      }
-
-      router.push("/dashboard");
-      router.refresh();
     } catch (err: any) {
       setError(err.message || "Failed to update password");
     } finally {
@@ -78,6 +69,20 @@ export default function SetPasswordPage() {
             {error}
           </div>
         )}
+
+        <div className="space-y-2">
+          <Label htmlFor="fullName">Full Name</Label>
+          <Input
+            id="fullName"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="John Doe"
+            required
+            className="focus:border-purp-700 h-12"
+            disabled={loading}
+          />
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="password">New Password</Label>
@@ -125,3 +130,13 @@ export default function SetPasswordPage() {
     </div>
   );
 }
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-purp-900" /></div>}>
+      <SetPasswordForm />
+    </Suspense>
+  );
+}
+
+

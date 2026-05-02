@@ -33,6 +33,7 @@ import { getDashboardStats, getMerchant, getMonthlyCollectionTotal } from "@/lib
 import { formatNaira } from "@/lib/calculations";
 import type { Merchant } from "@/lib/types";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 interface DashboardData {
   totalInvoiced: number;
@@ -48,14 +49,24 @@ interface DashboardData {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [monthlyCollected, setMonthlyCollected] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getDashboardStats(), getMerchant(), getMonthlyCollectionTotal()]).then(([dashData, merchantData, collected]) => {
+    const sb = createClient();
+    Promise.all([
+      getDashboardStats(), 
+      getMerchant(), 
+      getMonthlyCollectionTotal(),
+      sb.auth.getUser()
+    ]).then(([dashData, merchantData, collected, { data: { user } }]) => {
       setStats(dashData);
       setMerchant(merchantData);
       setMonthlyCollected(collected);
+      if (user) {
+        setUserName(user.user_metadata?.full_name || null);
+      }
       setLoading(false);
     });
   }, []);
@@ -143,7 +154,9 @@ export default function DashboardPage() {
 
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-purp-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-purp-900">
+          {userName ? `Welcome, ${userName}` : "Dashboard"}
+        </h1>
         <p className="text-neutral-500 text-sm mt-1">
           Here&apos;s your financial overview.
         </p>

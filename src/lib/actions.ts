@@ -266,7 +266,8 @@ export async function submitKycAction(merchantId: string, updates: any) {
 }
 
 export async function createCustomRoleAction(merchantId: string, roleName: string, permissions: Record<string, boolean>) {
-  await requirePermission(merchantId, "manage_team");
+  const permCheck = await requirePermission(merchantId, "manage_team");
+  if (!permCheck.permitted) return { success: false, error: permCheck.error };
   const supabase = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -299,7 +300,8 @@ export async function sendInviteAction(
   businessName: string,
   merchantId: string
 ) {
-  await requirePermission(merchantId, "manage_team");
+  const permCheck = await requirePermission(merchantId, "manage_team");
+  if (!permCheck.permitted) return { success: false, error: permCheck.error };
   if (!email || !role || !workspaceCode || !merchantId) {
     return { success: false, error: "Missing required fields" };
   }
@@ -352,12 +354,12 @@ export async function sendInviteAction(
   if (!roleData) return { success: false, error: "Invalid role specified" };
   const roleId = roleData.id;
 
-  // 3. Upsert into merchant_team with must_change_password = true
+  // 3. Upsert into merchant_team with must_change_password = true and is_active = false
   const { error: teamError } = await adminClient.from("merchant_team").upsert({
     merchant_id: merchantId,
     user_id: userId,
     role_id: roleId,
-    is_active: true,
+    is_active: false,
     must_change_password: true,
     invited_by: currentUser.id,
   }, { onConflict: "merchant_id,user_id" });
@@ -573,7 +575,8 @@ export async function reactivateTeamMemberAction(teamMemberId: string, merchantI
 }
 
 export async function removeTeamMemberAction(teamMemberId: string, merchantId: string) {
-  await requirePermission(merchantId, "manage_team");
+  const permCheck = await requirePermission(merchantId, "manage_team");
+  if (!permCheck.permitted) return { success: false, error: permCheck.error };
   const adminClient = getServiceClient();
   const { error } = await adminClient
     .from("merchant_team")
@@ -610,7 +613,7 @@ export async function fetchTeamMembersAction(merchantId: string) {
     user_id: row.user_id,
     email: userMap.get(row.user_id) || "Unknown User",
     role: row.roles?.name || "Viewer",
-    status: (row.is_active ? "active" : "inactive") as "active" | "inactive" | "invited",
+    status: (row.must_change_password ? "invited" : (row.is_active ? "active" : "inactive")) as "active" | "inactive" | "invited",
     joinedAt: row.added_at,
     is_active: row.is_active
   }));
@@ -1121,7 +1124,8 @@ export async function deleteClientAction(clientId: string) {
   if (!client) return { success: false, error: "Client not found" };
 
   try {
-    await requirePermission(client.merchant_id, "delete_client");
+    const permCheck = await requirePermission(client.merchant_id, "delete_client");
+    if (!permCheck.permitted) return { success: false, error: permCheck.error };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

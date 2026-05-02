@@ -112,6 +112,7 @@ export default function InvoicesPage() {
             )}
           </p>
         </div>
+        {(!merchant?.permissions || merchant.permissions.create_invoice) && (
         <div className="flex items-center gap-2">
           <Link href="/invoices/bulk">
             <Button variant="outline" className="border-2 border-purp-200 text-purp-700 font-semibold bg-white hover:bg-purp-50">
@@ -124,6 +125,7 @@ export default function InvoicesPage() {
             </Button>
           </Link>
         </div>
+        )}
       </div>
 
       {/* KPIs */}

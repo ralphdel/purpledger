@@ -40,6 +40,7 @@ export interface Merchant {
   platform_version: number;
   created_at: string;
   updated_at: string;
+  permissions?: Record<string, boolean>;
 }
 
 export interface Subscription {

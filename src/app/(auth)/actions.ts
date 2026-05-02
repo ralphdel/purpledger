@@ -6,74 +6,79 @@ import { cookies } from "next/headers";
 import { sendPasswordResetEmail } from "@/lib/brevo";
 
 export async function loginUser(formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const workspaceCode = formData.get("workspace_code") as string;
-  
-  if (!email || !password) {
-    return { success: false, error: "Email and password are required" };
-  }
-
-  const supabase = await createClient();
-  
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  if (workspaceCode && workspaceCode.trim() !== "") {
-    const formattedCode = workspaceCode.trim().toUpperCase();
+  try {
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const workspaceCode = formData.get("workspace_code") as string;
     
-    // 1. Find the UUID of the merchant by workspace_code
-    const { data: merchantData, error: merchantError } = await supabase
-      .from("merchants")
-      .select("id")
-      .eq("workspace_code", formattedCode)
-      .single();
-      
-    if (merchantError || !merchantData) {
-      await supabase.auth.signOut();
-      return { success: false, error: "Invalid Workspace Code." };
+    if (!email || !password) {
+      return { success: false, error: "Email and password are required" };
     }
-    
-    const merchantId = merchantData.id;
 
-    // 2. Verify team access using the resolved UUID
-    const { data: teamData, error: teamError } = await supabase
-      .from("merchant_team")
-      .select("id, must_change_password")
-      .eq("user_id", data.user.id)
-      .eq("merchant_id", merchantId)
-      .single();
-      
-    if (teamError || !teamData) {
-      await supabase.auth.signOut();
-      return { success: false, error: "You do not have access to this business workspace." };
-    }
+    const supabase = await createClient();
     
-    // Check if the user needs to change their password
-    if (teamData.must_change_password) {
-      // Don't set the workspace cookie yet, force them to set a password first
-      return { success: true, mustChangePassword: true };
-    }
-    
-    // 3. Set the cookie using the raw UUID so the rest of the app doesn't break
-    (await cookies()).set("purpledger_workspace_id", merchantId, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-  } else {
-    (await cookies()).delete("purpledger_workspace_id");
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (typeof workspaceCode === "string" && workspaceCode.trim() !== "") {
+      const formattedCode = workspaceCode.trim().toUpperCase();
+      
+      // 1. Find the UUID of the merchant by workspace_code
+      const { data: merchantData, error: merchantError } = await supabase
+        .from("merchants")
+        .select("id")
+        .eq("workspace_code", formattedCode)
+        .single();
+        
+      if (merchantError || !merchantData) {
+        await supabase.auth.signOut();
+        return { success: false, error: "Invalid Workspace Code." };
+      }
+      
+      const merchantId = merchantData.id;
+
+      // 2. Verify team access using the resolved UUID
+      const { data: teamData, error: teamError } = await supabase
+        .from("merchant_team")
+        .select("id, must_change_password")
+        .eq("user_id", data.user.id)
+        .eq("merchant_id", merchantId)
+        .single();
+        
+      if (teamError || !teamData) {
+        await supabase.auth.signOut();
+        return { success: false, error: "You do not have access to this business workspace." };
+      }
+      
+      // Check if the user needs to change their password
+      if (teamData.must_change_password) {
+        // Don't set the workspace cookie yet, force them to set a password first
+        return { success: true, mustChangePassword: true, workspace: formattedCode };
+      }
+      
+      // 3. Set the cookie using the raw UUID so the rest of the app doesn't break
+      (await cookies()).set("purpledger_workspace_id", merchantId, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      });
+    } else {
+      (await cookies()).delete("purpledger_workspace_id");
+    }
+    
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Server Action loginUser error:", err);
+    return { success: false, error: err.message || "An unexpected server error occurred." };
   }
-  
-  revalidatePath("/", "layout");
-  return { success: true };
 }
 
 export async function registerUser(formData: FormData) {
@@ -155,5 +160,55 @@ export async function forgotPasswordAction(email: string) {
     return { success: false, error: "Failed to send the email. Please try again later." };
   }
 
+  return { success: true };
+}
+
+export async function completePasswordResetAction(password: string, fullName: string, workspaceCode?: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated." };
+
+  const { error: updateError } = await supabase.auth.updateUser({ 
+    password,
+    data: { full_name: fullName }
+  });
+  if (updateError) return { success: false, error: updateError.message };
+
+  // Use service role client to bypass RLS
+  const { createClient: createSupabaseClient } = await import("@supabase/supabase-js");
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { error: teamError } = await adminClient
+    .from("merchant_team")
+    .update({ must_change_password: false, is_active: true })
+    .eq("user_id", user.id)
+    .eq("must_change_password", true);
+    
+  if (teamError) {
+    console.error("Failed to clear must_change_password flag:", teamError);
+  }
+
+  if (workspaceCode && workspaceCode.trim() !== "") {
+    const formattedCode = workspaceCode.trim().toUpperCase();
+    const { data: merchantData } = await adminClient
+      .from("merchants")
+      .select("id")
+      .eq("workspace_code", formattedCode)
+      .single();
+
+    if (merchantData) {
+      (await cookies()).set("purpledger_workspace_id", merchantData.id, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      });
+    }
+  }
+
+  revalidatePath("/", "layout");
   return { success: true };
 }

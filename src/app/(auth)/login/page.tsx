@@ -7,29 +7,41 @@ import { loginUser } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Building2, Users } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [loginMode, setLoginMode] = useState<"owner" | "team">("owner");
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     const formData = new FormData(e.currentTarget);
     
+    // Clear workspace_code if logging in as owner to ensure owner account loads
+    if (loginMode === "owner") {
+      formData.delete("workspace_code");
+    }
+
     startTransition(async () => {
-      const result = await loginUser(formData);
-      if (result.success) {
-        if (result.mustChangePassword) {
-          router.push("/set-password");
+      try {
+        const result = await loginUser(formData);
+        if (result.success) {
+          if (result.mustChangePassword) {
+            const workspace = result.workspace || formData.get("workspace_code") || "";
+            router.push(`/set-password?workspace=${workspace}`);
+          } else {
+            router.push("/dashboard");
+          }
         } else {
-          router.push("/dashboard");
+          setError(result.error || "Failed to log in.");
         }
-      } else {
-        setError(result.error || "Failed to log in.");
+      } catch (err: any) {
+        console.error("Login exception:", err);
+        setError(err.message || "An unexpected error occurred. Please try again.");
       }
     });
   };
@@ -44,9 +56,33 @@ export default function LoginPage() {
       </div>
 
       <h1 className="text-2xl font-bold text-purp-900">Welcome back</h1>
-      <p className="mt-2 text-neutral-500">Sign in to your merchant account</p>
+      <p className="mt-2 text-neutral-500">Sign in to your PurpLedger account</p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      {/* Login Mode Toggle */}
+      <div className="flex p-1 mt-6 bg-neutral-100 rounded-lg border border-neutral-200">
+        <button
+          type="button"
+          onClick={() => setLoginMode("owner")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-md transition-all ${
+            loginMode === "owner" ? "bg-white text-purp-900 shadow-sm border border-neutral-200/50" : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50"
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Business Owner
+        </button>
+        <button
+          type="button"
+          onClick={() => setLoginMode("team")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-md transition-all ${
+            loginMode === "team" ? "bg-white text-purp-900 shadow-sm border border-neutral-200/50" : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50"
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          Team Member
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         <div className="space-y-2">
           <Label htmlFor="email" className="text-sm font-medium text-neutral-900">
             Email Address
@@ -64,23 +100,26 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="workspace_code" className="text-sm font-medium text-neutral-900">
-              Business ID <span className="text-neutral-500 font-normal">(Team Members Only)</span>
-            </Label>
+        {loginMode === "team" && (
+          <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="workspace_code" className="text-sm font-medium text-neutral-900">
+                Business ID <span className="text-red-500">*</span>
+              </Label>
+            </div>
+            <Input
+              name="workspace_code"
+              id="workspace_code"
+              type="text"
+              placeholder="e.g. PL01234567890"
+              required={loginMode === "team"}
+              className="h-11 border-2 border-purp-200 bg-purp-50 focus:border-purp-700 focus:ring-purp-700 uppercase"
+            />
+            <p className="text-xs text-neutral-500">
+              Check your invite email for the Business ID.
+            </p>
           </div>
-          <Input
-            name="workspace_code"
-            id="workspace_code"
-            type="text"
-            placeholder="e.g. PL01234567890"
-            className="h-11 border-2 border-purp-200 bg-purp-50 focus:border-purp-700 focus:ring-purp-700 uppercase"
-          />
-          <p className="text-xs text-neutral-500">
-            Leave blank if you are the business owner. Team members check your invite email.
-          </p>
-        </div>
+        )}
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -112,7 +151,7 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md border border-red-200 font-medium text-center">
+          <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md border border-red-200 font-medium text-center animate-in fade-in">
             {error}
           </div>
         )}
