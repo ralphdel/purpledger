@@ -518,8 +518,8 @@ export async function adminResetPasswordAction(merchantId: string) {
 
   if (error) return { success: false, error: error.message };
 
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://purpledger.vercel.app");
 
   let resetLink = `${appUrl}/onboarding/resend`;
   const actionLink = data?.properties?.action_link;

@@ -332,8 +332,8 @@ async function handleSubscriptionPayment(
   // We use generateLink to get tokens, then construct a URL that sends the user
   // directly to /onboarding/set-password with tokens in the hash fragment.
   // This bypasses the /auth/callback PKCE flow which causes "Invalid or expired link" errors.
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const appUrl = configuredUrl || (process.env.NODE_ENV === "production" ? "https://purpledger.vercel.app" : "http://localhost:3000");
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const appUrl = configuredUrl || (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://purpledger.vercel.app");
 
   let setPasswordLink = `${appUrl}/onboarding/resend`; // fallback
 
